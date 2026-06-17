@@ -510,6 +510,24 @@ textarea {
   margin-bottom: 0.35rem;
 }
 
+.trip-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.trip-badge {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  color: white;
+  letter-spacing: 0.04em;
+}
+
 .trip-destination,
 .trip-dates,
 .trip-members {
@@ -706,6 +724,17 @@ textarea {
   margin-top: 0.15rem;
 }
 
+.archived-hint {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: var(--color-primary-light);
+  border-radius: var(--radius-md);
+  font-size: 0.85rem;
+  color: var(--color-primary-dark);
+  align-items: flex-start;
+}
+
 /* Settlement */
 .settlement-notice {
   display: flex;
@@ -772,6 +801,18 @@ textarea {
   font-size: 1.25rem;
   font-weight: 700;
   color: var(--color-primary);
+}
+
+.settlement-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.settlement-bottom .btn--outline {
+  border-color: var(--color-primary);
 }
 
 /* Settings */

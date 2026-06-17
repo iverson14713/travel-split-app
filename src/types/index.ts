@@ -1,5 +1,9 @@
 export type EditPermission = 'owner_only' | 'all_members'
 
+export type ExpenseType = 'expense' | 'transfer'
+
+export type TripStatus = 'active' | 'archived'
+
 export interface Member {
   id: string
   nickname: string
@@ -18,9 +22,11 @@ export interface ItineraryItem {
 
 export interface Expense {
   id: string
+  type: ExpenseType
   amount: number
   currency: string
   payerId: string
+  receiverId?: string
   participantIds: string[]
   category: string
   note: string
@@ -34,6 +40,9 @@ export interface Trip {
   destination: string
   startDate: string
   endDate: string
+  status: TripStatus
+  lastActivityAt: string
+  archivedAt?: string
   editPermission: EditPermission
   members: Member[]
   itinerary: ItineraryItem[]
@@ -47,7 +56,9 @@ export interface UserSession {
 }
 
 export interface SettlementItem {
+  fromId?: string
   from: string
+  toId?: string
   to: string
   amount: number
   currency: string

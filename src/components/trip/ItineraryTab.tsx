@@ -69,6 +69,12 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
 
   return (
     <div className="tab-panel">
+      {trip.status === 'archived' && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>這趟旅行已封存，新增內容會自動恢復為進行中</p>
+        </div>
+      )}
       {days.map((day) => {
         const items = trip.itinerary
           .filter((item) => item.day === day.day)

@@ -1,6 +1,6 @@
 import { requireSupabase } from '../lib/supabase'
 import { DB_TABLES } from '../lib/database.tables'
-import type { EditPermission, Expense, ItineraryItem, Member, Trip } from '../types'
+import type { EditPermission, Expense, ExpenseType, ItineraryItem, Member, Trip, TripStatus } from '../types'
 import { generateTripCode } from '../utils/tripCode'
 
 interface TripRow {
@@ -10,6 +10,10 @@ interface TripRow {
   destination: string | null
   start_date: string | null
   end_date: string | null
+  status: TripStatus
+  last_activity_at: string
+  archived_at: string | null
+  deleted_at: string | null
   edit_permission: EditPermission
   created_at: string
 }
@@ -38,6 +42,8 @@ interface ExpenseRow {
   id: string
   trip_id: string
   payer_member_id: string | null
+  receiver_member_id: string | null
+  type: ExpenseType
   amount: number
   currency: string
   category: string | null
@@ -69,9 +75,11 @@ function mapItinerary(row: ItineraryRow): ItineraryItem {
 function mapExpense(row: ExpenseRow): Expense {
   return {
     id: row.id,
+    type: row.type ?? 'expense',
     amount: Number(row.amount),
     currency: row.currency,
     payerId: row.payer_member_id ?? '',
+    receiverId: row.receiver_member_id ?? undefined,
     participantIds: row.participant_member_ids ?? [],
     category: row.category ?? '',
     note: row.note ?? '',
@@ -92,12 +100,35 @@ function mapTrip(
     destination: row.destination ?? '',
     startDate: row.start_date ?? '',
     endDate: row.end_date ?? '',
+    status: row.status ?? 'active',
+    lastActivityAt: row.last_activity_at,
+    archivedAt: row.archived_at ?? undefined,
     editPermission: row.edit_permission as EditPermission,
     members: members.map(mapMember),
     itinerary: itinerary.map(mapItinerary),
     expenses: expenses.map(mapExpense),
     createdAt: row.created_at,
   }
+}
+
+async function touchTripActivity(tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({ last_activity_at: new Date().toISOString() })
+    .eq('id', tripId)
+  if (error) throw error
+}
+
+async function reviveTripIfArchived(tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({ status: 'active', archived_at: null, last_activity_at: now })
+    .eq('id', tripId)
+    .eq('status', 'archived')
+  if (error) throw error
 }
 
 export async function fetchTripByCode(code: string): Promise<Trip | null> {
@@ -108,6 +139,7 @@ export async function fetchTripByCode(code: string): Promise<Trip | null> {
     .from(DB_TABLES.trips)
     .select('*')
     .eq('code', normalizedCode)
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (tripError) throw tripError
@@ -132,6 +164,7 @@ export async function tripCodeExists(code: string): Promise<boolean> {
     .from(DB_TABLES.trips)
     .select('id')
     .eq('code', code.toUpperCase())
+    .is('deleted_at', null)
     .maybeSingle()
 
   if (error) throw error
@@ -152,6 +185,7 @@ export interface CreateTripInput {
   destination: string
   startDate: string
   endDate: string
+  ownerName?: string
 }
 
 export interface CreateTripResult {
@@ -182,7 +216,7 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
     .from(DB_TABLES.members)
     .insert({
       trip_id: tripRow.id,
-      name: '主揪',
+      name: input.ownerName?.trim() || '主揪',
       role: 'owner',
     })
     .select()
@@ -208,6 +242,7 @@ export async function joinTrip(tripId: string, nickname: string): Promise<Member
     .single()
 
   if (error) throw error
+  await touchTripActivity(tripId)
   return mapMember(data)
 }
 
@@ -233,11 +268,15 @@ export async function addItineraryItem(input: {
   })
 
   if (error) throw error
+  await reviveTripIfArchived(input.tripId)
+  await touchTripActivity(input.tripId)
 }
 
 export async function addExpense(input: {
   tripId: string
+  type: ExpenseType
   payerMemberId: string
+  receiverMemberId?: string
   amount: number
   currency: string
   category: string
@@ -248,7 +287,9 @@ export async function addExpense(input: {
 
   const { error } = await db.from(DB_TABLES.expenses).insert({
     trip_id: input.tripId,
+    type: input.type,
     payer_member_id: input.payerMemberId,
+    receiver_member_id: input.receiverMemberId ?? null,
     amount: input.amount,
     currency: input.currency,
     category: input.category,
@@ -257,6 +298,22 @@ export async function addExpense(input: {
   })
 
   if (error) throw error
+  await reviveTripIfArchived(input.tripId)
+  await touchTripActivity(input.tripId)
+}
+
+export async function updateMemberName(memberId: string, name: string): Promise<void> {
+  const db = requireSupabase()
+
+  const { data, error } = await db
+    .from(DB_TABLES.members)
+    .update({ name })
+    .eq('id', memberId)
+    .select('trip_id')
+    .single()
+
+  if (error) throw error
+  await touchTripActivity(data.trip_id)
 }
 
 export async function updateEditPermission(
@@ -267,8 +324,55 @@ export async function updateEditPermission(
 
   const { error } = await db
     .from(DB_TABLES.trips)
-    .update({ edit_permission: permission })
+    .update({ edit_permission: permission, last_activity_at: new Date().toISOString() })
     .eq('id', tripId)
 
   if (error) throw error
+}
+
+export async function archiveTrip(tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({ status: 'archived', archived_at: now, last_activity_at: now })
+    .eq('id', tripId)
+  if (error) throw error
+}
+
+export async function restoreTrip(tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({ status: 'active', archived_at: null, last_activity_at: now })
+    .eq('id', tripId)
+  if (error) throw error
+}
+
+export async function softDeleteTrip(tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const now = new Date().toISOString()
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({ deleted_at: now, last_activity_at: now })
+    .eq('id', tripId)
+  if (error) throw error
+}
+
+export async function getTripAvailabilityByCode(code: string): Promise<{
+  id: string
+  name: string
+  deleted: boolean
+} | null> {
+  const db = requireSupabase()
+  const normalizedCode = code.trim().toUpperCase()
+  const { data, error } = await db
+    .from(DB_TABLES.trips)
+    .select('id,name,deleted_at')
+    .eq('code', normalizedCode)
+    .maybeSingle()
+  if (error) throw error
+  if (!data) return null
+  return { id: data.id, name: data.name, deleted: data.deleted_at != null }
 }

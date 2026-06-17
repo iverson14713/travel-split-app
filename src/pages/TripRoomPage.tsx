@@ -89,7 +89,10 @@ export function TripRoomPage() {
       <div className="trip-room">
         <header className="trip-header">
           <div className="trip-header-info">
-            <h1 className="trip-name">{trip.name}</h1>
+            <div className="trip-title-row">
+              <h1 className="trip-name">{trip.name}</h1>
+              {trip.status === 'archived' && <span className="trip-badge">已封存</span>}
+            </div>
             <p className="trip-destination">📍 {trip.destination}</p>
             <p className="trip-dates">{formatDateRange(trip.startDate, trip.endDate)}</p>
             <p className="trip-members">👥 {trip.members.length} 位成員</p>
@@ -130,12 +133,20 @@ export function TripRoomPage() {
               onReload={reload}
             />
           )}
-          {activeTab === 'settlement' && <SettlementTab trip={trip} />}
+          {activeTab === 'settlement' && (
+            <SettlementTab
+              trip={trip}
+              tripId={trip.id}
+              currentMemberId={currentMember?.id}
+              onReload={reload}
+            />
+          )}
           {activeTab === 'settings' && (
             <SettingsTab
               trip={trip}
               tripId={trip.id}
               isHost={currentMember?.isHost ?? false}
+              currentMemberId={currentMember?.id}
               onReload={reload}
             />
           )}

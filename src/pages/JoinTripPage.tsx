@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { fetchTripByCode, joinTrip } from '../services/tripService'
+import { getTripAvailabilityByCode, joinTrip } from '../services/tripService'
 import { hasSessionForTrip, setSession } from '../utils/storage'
 
 export function JoinTripPage() {
@@ -18,6 +18,7 @@ export function JoinTripPage() {
   const [tripFound, setTripFound] = useState<boolean | null>(null)
   const [tripId, setTripId] = useState<string | null>(null)
   const [tripName, setTripName] = useState('')
+  const [tripDeleted, setTripDeleted] = useState(false)
 
   useEffect(() => {
     if (urlCode) setCode(urlCode)
@@ -42,24 +43,36 @@ export function JoinTripPage() {
     let cancelled = false
     setCheckingTrip(true)
 
-    fetchTripByCode(trimmedCode)
+    getTripAvailabilityByCode(trimmedCode)
       .then((trip) => {
         if (cancelled) return
-        if (trip) {
-          setTripFound(true)
-          setTripId(trip.id)
-          setTripName(trip.name)
-        } else {
+        if (!trip) {
           setTripFound(false)
           setTripId(null)
           setTripName('')
+          setTripDeleted(false)
+          return
         }
+
+        if (trip.deleted) {
+          setTripFound(false)
+          setTripId(null)
+          setTripName(trip.name)
+          setTripDeleted(true)
+          return
+        }
+
+        setTripFound(true)
+        setTripId(trip.id)
+        setTripName(trip.name)
+        setTripDeleted(false)
       })
       .catch(() => {
         if (cancelled) return
         setTripFound(false)
         setTripId(null)
         setTripName('')
+        setTripDeleted(false)
       })
       .finally(() => {
         if (!cancelled) setCheckingTrip(false)
@@ -93,9 +106,13 @@ export function JoinTripPage() {
     try {
       let resolvedTripId = tripId
       if (!resolvedTripId) {
-        const trip = await fetchTripByCode(trimmedCode)
+        const trip = await getTripAvailabilityByCode(trimmedCode)
         if (!trip) {
           setError('找不到此旅行代碼，請確認是否正確')
+          return
+        }
+        if (trip.deleted) {
+          setError('此旅行已不存在或已被刪除')
           return
         }
         resolvedTripId = trip.id
@@ -111,7 +128,8 @@ export function JoinTripPage() {
     }
   }
 
-  const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0
+  const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0 && !tripDeleted
+  const showDeleted = !checkingTrip && tripDeleted
 
   return (
     <Layout showBack backTo="/">
@@ -130,6 +148,7 @@ export function JoinTripPage() {
         {showNotFound && (
           <p className="form-error-msg">找不到此旅行代碼，請確認是否正確</p>
         )}
+        {showDeleted && <p className="form-error-msg">此旅行已不存在或已被刪除</p>}
 
         <form
           className="form"
@@ -151,7 +170,7 @@ export function JoinTripPage() {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             autoFocus={!!urlCode}
-            disabled={showNotFound}
+            disabled={showNotFound || showDeleted}
           />
 
           {error && <p className="form-error-msg">{error}</p>}
@@ -160,7 +179,7 @@ export function JoinTripPage() {
             type="submit"
             fullWidth
             size="lg"
-            disabled={submitting || checkingTrip || showNotFound}
+            disabled={submitting || checkingTrip || showNotFound || showDeleted}
           >
             {submitting ? '加入中...' : '加入旅行'}
           </Button>

@@ -12,6 +12,11 @@ create table if not exists travel_trips (
   destination text,
   start_date date,
   end_date date,
+  status text not null default 'active'
+    check (status in ('active', 'archived')),
+  last_activity_at timestamptz not null default now(),
+  archived_at timestamptz,
+  deleted_at timestamptz,
   edit_permission text not null default 'owner_only'
     check (edit_permission in ('owner_only', 'all_members')),
   created_at timestamptz not null default now()
@@ -42,6 +47,9 @@ create table if not exists travel_expenses (
   id uuid primary key default gen_random_uuid(),
   trip_id uuid not null references travel_trips(id) on delete cascade,
   payer_member_id uuid references travel_members(id) on delete set null,
+  receiver_member_id uuid references travel_members(id) on delete set null,
+  type text not null default 'expense'
+    check (type in ('expense', 'transfer')),
   amount numeric not null,
   currency text not null default 'JPY',
   category text,
@@ -116,3 +124,11 @@ create policy "travel_anon_update_expenses"
 
 create policy "travel_anon_delete_expenses"
   on travel_expenses for delete to anon using (true);
+
+-- ============================================================
+-- Notes: future automated cleanup
+-- ============================================================
+-- MVP 目前採 soft delete（travel_trips.deleted_at）與封存（status=archived）。
+-- 未來可使用 Supabase Edge Function 或 Scheduled Function：
+-- - 清理 last_activity_at 超過 180 天且 deleted_at is not null 的資料
+-- - 或針對 archived 超過一定時間的旅行做清理/匯出備份

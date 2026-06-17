@@ -81,15 +81,23 @@ export function computeSettlementsByCurrency(input: {
     for (const m of members) balances[m.id] = 0
 
     for (const exp of list) {
+      const amount = Number(exp.amount)
+      if (!Number.isFinite(amount) || isZero(amount, decimals)) continue
+
+      if (exp.type === 'transfer') {
+        const payerId = exp.payerId
+        const receiverId = exp.receiverId
+        if (!payerId || !receiverId) continue
+        balances[payerId] = (balances[payerId] ?? 0) + amount
+        balances[receiverId] = (balances[receiverId] ?? 0) - amount
+        continue
+      }
+
       const payerId = exp.payerId
       const participants = exp.participantIds?.filter(Boolean) ?? []
       if (!payerId || participants.length === 0) continue
 
-      const amount = Number(exp.amount)
-      if (!Number.isFinite(amount) || isZero(amount, decimals)) continue
-
       const share = amount / participants.length
-
       balances[payerId] = (balances[payerId] ?? 0) + amount
       for (const pid of participants) {
         balances[pid] = (balances[pid] ?? 0) - share
@@ -106,7 +114,9 @@ export function computeSettlementsByCurrency(input: {
 
     const items: SettlementItem[] = transfers
       .map((t) => ({
+        fromId: t.fromId,
         from: memberById.get(t.fromId)?.nickname ?? '未知',
+        toId: t.toId,
         to: memberById.get(t.toId)?.nickname ?? '未知',
         amount: t.amount,
         currency,

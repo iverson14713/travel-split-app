@@ -10,6 +10,7 @@ import { setSession } from '../utils/storage'
 
 export function CreateTripPage() {
   const navigate = useNavigate()
+  const [ownerName, setOwnerName] = useState('主揪')
   const [name, setName] = useState('')
   const [destination, setDestination] = useState('')
   const [startDate, setStartDate] = useState('')
@@ -41,6 +42,7 @@ export function CreateTripPage() {
     setSubmitting(true)
     try {
       const { trip, memberId } = await createTrip({
+        ownerName: ownerName.trim() || '主揪',
         name: name.trim(),
         destination: destination.trim(),
         startDate,
@@ -109,6 +111,12 @@ export function CreateTripPage() {
             handleCreate()
           }}
         >
+          <Input
+            label="你的暱稱"
+            placeholder="例：主揪"
+            value={ownerName}
+            onChange={(e) => setOwnerName(e.target.value)}
+          />
           <Input
             label="旅行名稱"
             placeholder="例：京都賞楓之旅"

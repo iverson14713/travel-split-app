@@ -1,12 +1,18 @@
+import { useState } from 'react'
 import type { Trip } from '../../types'
 import { Card } from '../ui/Card'
 import { computeSettlementsByCurrency } from '../../utils/settlement'
+import { Button } from '../ui/Button'
+import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 
 interface SettlementTabProps {
   trip: Trip
+  tripId: string
+  currentMemberId?: string
+  onReload: () => Promise<void>
 }
 
-export function SettlementTab({ trip }: SettlementTabProps) {
+export function SettlementTab({ trip, tripId, currentMemberId, onReload }: SettlementTabProps) {
   const byCurrency = computeSettlementsByCurrency({
     members: trip.members,
     expenses: trip.expenses,
@@ -14,6 +20,8 @@ export function SettlementTab({ trip }: SettlementTabProps) {
 
   const hasAnyExpense = trip.expenses.length > 0
   const hasAnySettlement = byCurrency.some((g) => g.items.length > 0)
+  const [showRepayModal, setShowRepayModal] = useState(false)
+  const [repayPreset, setRepayPreset] = useState<ExpenseUpsertModalPreset | undefined>(undefined)
 
   return (
     <div className="tab-panel">
@@ -42,9 +50,28 @@ export function SettlementTab({ trip }: SettlementTabProps) {
                         <span className="settlement-arrow">→ 付給 →</span>
                         <span className="settlement-to">{item.to}</span>
                       </div>
-                      <p className="settlement-amount">
-                        {item.currency} {item.amount.toLocaleString()}
-                      </p>
+                      <div className="settlement-bottom">
+                        <p className="settlement-amount">
+                          {item.currency} {item.amount.toLocaleString()}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setRepayPreset({
+                              type: 'transfer',
+                              amount: item.amount,
+                              currency: item.currency,
+                              payerMemberId: item.fromId,
+                              receiverMemberId: item.toId,
+                            })
+                            setShowRepayModal(true)
+                          }}
+                          disabled={!item.fromId || !item.toId}
+                        >
+                          記錄已還款
+                        </Button>
+                      </div>
                     </Card>
                   ))}
                 </div>
@@ -52,6 +79,17 @@ export function SettlementTab({ trip }: SettlementTabProps) {
             ))}
         </div>
       )}
+
+      <ExpenseUpsertModal
+        open={showRepayModal}
+        onClose={() => setShowRepayModal(false)}
+        title="記錄還款/轉帳"
+        trip={trip}
+        tripId={tripId}
+        currentMemberId={currentMemberId}
+        preset={repayPreset}
+        onSaved={onReload}
+      />
     </div>
   )
 }
