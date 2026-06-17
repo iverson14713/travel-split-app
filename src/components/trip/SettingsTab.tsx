@@ -1,22 +1,32 @@
 import { useState } from 'react'
 import type { EditPermission, Trip } from '../../types'
+import { updateEditPermission } from '../../services/tripService'
 import { getShareLink } from '../../utils/tripCode'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 
 interface SettingsTabProps {
   trip: Trip
-  updateTrip: (updater: (prev: Trip) => Trip) => void
+  tripId: string
   isHost: boolean
+  onReload: () => Promise<void>
 }
 
-export function SettingsTab({ trip, updateTrip, isHost }: SettingsTabProps) {
+export function SettingsTab({ trip, tripId, isHost, onReload }: SettingsTabProps) {
   const [copied, setCopied] = useState(false)
+  const [updating, setUpdating] = useState(false)
   const shareLink = getShareLink(trip.code)
 
-  const handlePermissionChange = (permission: EditPermission) => {
-    if (!isHost) return
-    updateTrip((prev) => ({ ...prev, editPermission: permission }))
+  const handlePermissionChange = async (permission: EditPermission) => {
+    if (!isHost || trip.editPermission === permission) return
+
+    setUpdating(true)
+    try {
+      await updateEditPermission(tripId, permission)
+      await onReload()
+    } finally {
+      setUpdating(false)
+    }
   }
 
   const handleCopy = async () => {
@@ -34,9 +44,9 @@ export function SettingsTab({ trip, updateTrip, isHost }: SettingsTabProps) {
             <input
               type="radio"
               name="editPermission"
-              checked={trip.editPermission === 'host_only'}
-              onChange={() => handlePermissionChange('host_only')}
-              disabled={!isHost}
+              checked={trip.editPermission === 'owner_only'}
+              onChange={() => handlePermissionChange('owner_only')}
+              disabled={!isHost || updating}
             />
             <div>
               <strong>只有主揪可編輯</strong>
@@ -49,7 +59,7 @@ export function SettingsTab({ trip, updateTrip, isHost }: SettingsTabProps) {
               name="editPermission"
               checked={trip.editPermission === 'all_members'}
               onChange={() => handlePermissionChange('all_members')}
-              disabled={!isHost}
+              disabled={!isHost || updating}
             />
             <div>
               <strong>所有成員可編輯</strong>
@@ -78,7 +88,7 @@ export function SettingsTab({ trip, updateTrip, isHost }: SettingsTabProps) {
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-title">成員列表</h3>
+        <h3 className="settings-title">成員列表（{trip.members.length}）</h3>
         <div className="member-list">
           {trip.members.map((m) => (
             <div key={m.id} className="member-item">

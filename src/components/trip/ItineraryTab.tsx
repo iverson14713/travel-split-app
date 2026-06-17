@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Trip } from '../../types'
 import { getTripDays } from '../../utils/dates'
-import { createId } from '../../utils/id'
+import { addItineraryItem } from '../../services/tripService'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
@@ -11,11 +11,13 @@ import { Card } from '../ui/Card'
 
 interface ItineraryTabProps {
   trip: Trip
-  updateTrip: (updater: (prev: Trip) => Trip) => void
+  tripId: string
+  memberId?: string
   canEdit: boolean
+  onReload: () => Promise<void>
 }
 
-export function ItineraryTab({ trip, updateTrip, canEdit }: ItineraryTabProps) {
+export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
   const [showModal, setShowModal] = useState(false)
   const [selectedDay, setSelectedDay] = useState(1)
@@ -23,12 +25,15 @@ export function ItineraryTab({ trip, updateTrip, canEdit }: ItineraryTabProps) {
   const [title, setTitle] = useState('')
   const [location, setLocation] = useState('')
   const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
   const resetForm = () => {
     setTime('')
     setTitle('')
     setLocation('')
     setNote('')
+    setError('')
   }
 
   const openAdd = (day: number) => {
@@ -37,24 +42,29 @@ export function ItineraryTab({ trip, updateTrip, canEdit }: ItineraryTabProps) {
     setShowModal(true)
   }
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!title.trim()) return
-    updateTrip((prev) => ({
-      ...prev,
-      itinerary: [
-        ...prev.itinerary,
-        {
-          id: createId(),
-          day: selectedDay,
-          time,
-          title: title.trim(),
-          location: location.trim(),
-          note: note.trim(),
-        },
-      ],
-    }))
-    setShowModal(false)
-    resetForm()
+
+    setSubmitting(true)
+    setError('')
+    try {
+      await addItineraryItem({
+        tripId,
+        dayIndex: selectedDay,
+        time,
+        title: title.trim(),
+        location: location.trim(),
+        note: note.trim(),
+        createdBy: memberId,
+      })
+      await onReload()
+      setShowModal(false)
+      resetForm()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '新增行程失敗')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -130,8 +140,9 @@ export function ItineraryTab({ trip, updateTrip, canEdit }: ItineraryTabProps) {
             onChange={(e) => setNote(e.target.value)}
             rows={3}
           />
-          <Button fullWidth onClick={handleAdd}>
-            新增行程
+          {error && <p className="form-error-msg">{error}</p>}
+          <Button fullWidth onClick={handleAdd} disabled={submitting}>
+            {submitting ? '新增中...' : '新增行程'}
           </Button>
         </div>
       </Modal>

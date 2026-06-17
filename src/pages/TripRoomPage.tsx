@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
-import { getSessionForTrip } from '../utils/storage'
+import { getSession } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getShareLink } from '../utils/tripCode'
 import { Button } from '../components/ui/Button'
@@ -23,14 +23,15 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 export function TripRoomPage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
-  const { trip, loading, updateTrip } = useTrip(code)
+  const { trip, loading, error, reload } = useTrip(code)
   const [activeTab, setActiveTab] = useState<Tab>('itinerary')
   const [copied, setCopied] = useState(false)
 
   const tripCode = code?.toUpperCase() ?? ''
-  const sessionData = tripCode ? getSessionForTrip(tripCode) : null
-  const hasValidSession = !!sessionData
-  const currentMember = sessionData?.member
+  const session = getSession()
+  const sessionMatchesTrip = session?.tripCode === tripCode
+  const currentMember = trip?.members.find((m) => m.id === session?.memberId)
+  const hasValidSession = sessionMatchesTrip && !!currentMember
 
   useEffect(() => {
     if (loading) return
@@ -51,6 +52,18 @@ export function TripRoomPage() {
       <Layout>
         <div className="page page--center">
           <p className="loading-text">載入中...</p>
+        </div>
+      </Layout>
+    )
+  }
+
+  if (error) {
+    return (
+      <Layout showBack backTo="/">
+        <div className="page page--center">
+          <p className="empty-icon">⚠️</p>
+          <h2 className="page-title">載入失敗</h2>
+          <p className="page-desc">{error}</p>
         </div>
       </Layout>
     )
@@ -101,14 +114,30 @@ export function TripRoomPage() {
 
         <div className="tab-content">
           {activeTab === 'itinerary' && (
-            <ItineraryTab trip={trip} updateTrip={updateTrip} canEdit={canEditItinerary} />
+            <ItineraryTab
+              trip={trip}
+              tripId={trip.id}
+              memberId={currentMember?.id}
+              canEdit={canEditItinerary}
+              onReload={reload}
+            />
           )}
           {activeTab === 'expenses' && (
-            <ExpensesTab trip={trip} updateTrip={updateTrip} currentMemberId={currentMember?.id} />
+            <ExpensesTab
+              trip={trip}
+              tripId={trip.id}
+              currentMemberId={currentMember?.id}
+              onReload={reload}
+            />
           )}
           {activeTab === 'settlement' && <SettlementTab trip={trip} />}
           {activeTab === 'settings' && (
-            <SettingsTab trip={trip} updateTrip={updateTrip} isHost={currentMember?.isHost ?? false} />
+            <SettingsTab
+              trip={trip}
+              tripId={trip.id}
+              isHost={currentMember?.isHost ?? false}
+              onReload={reload}
+            />
           )}
         </div>
       </div>

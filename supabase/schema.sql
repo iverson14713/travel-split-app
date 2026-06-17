@@ -1,0 +1,118 @@
+-- 旅伴小本本 Supabase Schema
+-- 貼到 Supabase SQL Editor 執行
+
+-- ============================================================
+-- Tables
+-- ============================================================
+
+create table if not exists travel_trips (
+  id uuid primary key default gen_random_uuid(),
+  code text unique not null,
+  name text not null,
+  destination text,
+  start_date date,
+  end_date date,
+  edit_permission text not null default 'owner_only'
+    check (edit_permission in ('owner_only', 'all_members')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists travel_members (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references travel_trips(id) on delete cascade,
+  name text not null,
+  role text not null default 'member'
+    check (role in ('owner', 'member')),
+  created_at timestamptz not null default now()
+);
+
+create table if not exists travel_itinerary_items (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references travel_trips(id) on delete cascade,
+  day_index int not null,
+  time text,
+  title text not null,
+  location text,
+  note text,
+  created_by uuid references travel_members(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists travel_expenses (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references travel_trips(id) on delete cascade,
+  payer_member_id uuid references travel_members(id) on delete set null,
+  amount numeric not null,
+  currency text not null default 'JPY',
+  category text,
+  note text,
+  participant_member_ids uuid[] not null default '{}',
+  created_at timestamptz not null default now()
+);
+
+-- ============================================================
+-- Indexes
+-- ============================================================
+
+create index if not exists idx_travel_trips_code on travel_trips(code);
+create index if not exists idx_travel_members_trip_id on travel_members(trip_id);
+create index if not exists idx_travel_itinerary_items_trip_id on travel_itinerary_items(trip_id);
+create index if not exists idx_travel_expenses_trip_id on travel_expenses(trip_id);
+
+-- ============================================================
+-- Row Level Security (MVP: open anon access)
+-- ============================================================
+
+alter table travel_trips enable row level security;
+alter table travel_members enable row level security;
+alter table travel_itinerary_items enable row level security;
+alter table travel_expenses enable row level security;
+
+-- travel_trips
+create policy "travel_anon_select_trips"
+  on travel_trips for select to anon using (true);
+
+create policy "travel_anon_insert_trips"
+  on travel_trips for insert to anon with check (true);
+
+create policy "travel_anon_update_trips"
+  on travel_trips for update to anon using (true) with check (true);
+
+-- travel_members
+create policy "travel_anon_select_members"
+  on travel_members for select to anon using (true);
+
+create policy "travel_anon_insert_members"
+  on travel_members for insert to anon with check (true);
+
+create policy "travel_anon_update_members"
+  on travel_members for update to anon using (true) with check (true);
+
+create policy "travel_anon_delete_members"
+  on travel_members for delete to anon using (true);
+
+-- travel_itinerary_items
+create policy "travel_anon_select_itinerary_items"
+  on travel_itinerary_items for select to anon using (true);
+
+create policy "travel_anon_insert_itinerary_items"
+  on travel_itinerary_items for insert to anon with check (true);
+
+create policy "travel_anon_update_itinerary_items"
+  on travel_itinerary_items for update to anon using (true) with check (true);
+
+create policy "travel_anon_delete_itinerary_items"
+  on travel_itinerary_items for delete to anon using (true);
+
+-- travel_expenses
+create policy "travel_anon_select_expenses"
+  on travel_expenses for select to anon using (true);
+
+create policy "travel_anon_insert_expenses"
+  on travel_expenses for insert to anon with check (true);
+
+create policy "travel_anon_update_expenses"
+  on travel_expenses for update to anon using (true) with check (true);
+
+create policy "travel_anon_delete_expenses"
+  on travel_expenses for delete to anon using (true);

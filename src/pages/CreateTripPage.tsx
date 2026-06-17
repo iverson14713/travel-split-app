@@ -4,10 +4,9 @@ import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
-import type { Trip } from '../types'
-import { createId } from '../utils/id'
-import { generateTripCode, getShareLink } from '../utils/tripCode'
-import { getAllTrips, saveTrip, setSession } from '../utils/storage'
+import { createTrip } from '../services/tripService'
+import { getShareLink } from '../utils/tripCode'
+import { setSession } from '../utils/storage'
 
 export function CreateTripPage() {
   const navigate = useNavigate()
@@ -15,11 +14,12 @@ export function CreateTripPage() {
   const [destination, setDestination] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
-  const [created, setCreated] = useState<Trip | null>(null)
+  const [createdCode, setCreatedCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
 
-  const handleCreate = () => {
+  const handleCreate = async () => {
     setError('')
     if (!name.trim()) {
       setError('請輸入旅行名稱')
@@ -38,40 +38,25 @@ export function CreateTripPage() {
       return
     }
 
-    const existingTrips = getAllTrips()
-    let code = generateTripCode()
-    while (existingTrips[code]) {
-      code = generateTripCode()
-    }
+    setSubmitting(true)
+    try {
+      const { trip, memberId } = await createTrip({
+        name: name.trim(),
+        destination: destination.trim(),
+        startDate,
+        endDate,
+      })
 
-    const hostId = createId()
-    const trip: Trip = {
-      id: createId(),
-      code,
-      name: name.trim(),
-      destination: destination.trim(),
-      startDate,
-      endDate,
-      editPermission: 'host_only',
-      members: [
-        {
-          id: hostId,
-          nickname: '主揪',
-          isHost: true,
-          joinedAt: new Date().toISOString(),
-        },
-      ],
-      itinerary: [],
-      expenses: [],
-      createdAt: new Date().toISOString(),
+      setSession({ tripCode: trip.code, memberId })
+      setCreatedCode(trip.code)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '建立旅行失敗，請稍後再試')
+    } finally {
+      setSubmitting(false)
     }
-
-    saveTrip(trip)
-    setSession({ tripCode: code, memberId: hostId })
-    setCreated(trip)
   }
 
-  const shareLink = created ? getShareLink(created.code) : ''
+  const shareLink = createdCode ? getShareLink(createdCode) : ''
 
   const handleCopy = async () => {
     if (!shareLink) return
@@ -80,7 +65,7 @@ export function CreateTripPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  if (created) {
+  if (createdCode) {
     return (
       <Layout showBack backTo="/">
         <div className="page">
@@ -90,7 +75,7 @@ export function CreateTripPage() {
           <Card className="success-card">
             <div className="success-item">
               <span className="success-label">旅行代碼</span>
-              <span className="success-code">{created.code}</span>
+              <span className="success-code">{createdCode}</span>
             </div>
             <div className="success-item">
               <span className="success-label">分享連結</span>
@@ -102,7 +87,7 @@ export function CreateTripPage() {
             <Button fullWidth onClick={handleCopy}>
               {copied ? '已複製！' : '複製分享連結'}
             </Button>
-            <Button fullWidth variant="secondary" onClick={() => navigate(`/trip/${created.code}`)}>
+            <Button fullWidth variant="secondary" onClick={() => navigate(`/trip/${createdCode}`)}>
               進入旅行房間
             </Button>
           </div>
@@ -151,8 +136,8 @@ export function CreateTripPage() {
 
           {error && <p className="form-error-msg">{error}</p>}
 
-          <Button type="submit" fullWidth size="lg">
-            建立旅行
+          <Button type="submit" fullWidth size="lg" disabled={submitting}>
+            {submitting ? '建立中...' : '建立旅行'}
           </Button>
         </form>
       </div>

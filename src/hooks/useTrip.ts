@@ -1,22 +1,39 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { Trip } from '../types'
-import { getTrip, saveTrip } from '../utils/storage'
-
-const TRIPS_KEY = 'travel-split-trips'
+import { isSupabaseConfigured } from '../lib/supabase'
+import { fetchTripByCode } from '../services/tripService'
 
 export function useTrip(code: string | undefined) {
   const [trip, setTripState] = useState<Trip | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     if (!code) {
+      setTripState(null)
+      setLoading(false)
+      setError(null)
+      return
+    }
+
+    if (!isSupabaseConfigured) {
       setTripState(null)
       setLoading(false)
       return
     }
-    const found = getTrip(code)
-    setTripState(found)
-    setLoading(false)
+
+    setLoading(true)
+    setError(null)
+
+    try {
+      const data = await fetchTripByCode(code)
+      setTripState(data)
+    } catch (err) {
+      setTripState(null)
+      setError(err instanceof Error ? err.message : '載入旅行資料失敗')
+    } finally {
+      setLoading(false)
+    }
   }, [code])
 
   useEffect(() => {
@@ -24,33 +41,14 @@ export function useTrip(code: string | undefined) {
   }, [reload])
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === TRIPS_KEY) reload()
-    }
     const onFocus = () => reload()
-
-    window.addEventListener('storage', onStorage)
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onFocus)
-
     return () => {
-      window.removeEventListener('storage', onStorage)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onFocus)
     }
   }, [reload])
 
-  const updateTrip = useCallback(
-    (updater: (prev: Trip) => Trip) => {
-      if (!code) return
-      const current = getTrip(code)
-      if (!current) return
-      const updated = updater(current)
-      saveTrip(updated)
-      setTripState(updated)
-    },
-    [code],
-  )
-
-  return { trip, loading, updateTrip, reload }
+  return { trip, loading, error, reload }
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { Trip } from '../../types'
-import { createId } from '../../utils/id'
+import { addExpense } from '../../services/tripService'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
@@ -27,11 +27,12 @@ const CATEGORIES = [
 
 interface ExpensesTabProps {
   trip: Trip
-  updateTrip: (updater: (prev: Trip) => Trip) => void
+  tripId: string
   currentMemberId?: string
+  onReload: () => Promise<void>
 }
 
-export function ExpensesTab({ trip, updateTrip, currentMemberId }: ExpensesTabProps) {
+export function ExpensesTab({ trip, tripId, currentMemberId, onReload }: ExpensesTabProps) {
   const [showModal, setShowModal] = useState(false)
   const [amount, setAmount] = useState('')
   const [currency, setCurrency] = useState('TWD')
@@ -41,6 +42,8 @@ export function ExpensesTab({ trip, updateTrip, currentMemberId }: ExpensesTabPr
   )
   const [category, setCategory] = useState('餐飲')
   const [note, setNote] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState('')
 
   const getMemberName = (id: string) =>
     trip.members.find((m) => m.id === id)?.nickname ?? '未知'
@@ -58,31 +61,34 @@ export function ExpensesTab({ trip, updateTrip, currentMemberId }: ExpensesTabPr
     setParticipantIds(trip.members.map((m) => m.id))
     setCategory('餐飲')
     setNote('')
+    setError('')
   }
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     const parsedAmount = parseFloat(amount)
     if (!parsedAmount || parsedAmount <= 0) return
     if (!payerId || participantIds.length === 0) return
 
-    updateTrip((prev) => ({
-      ...prev,
-      expenses: [
-        ...prev.expenses,
-        {
-          id: createId(),
-          amount: parsedAmount,
-          currency,
-          payerId,
-          participantIds: [...participantIds],
-          category,
-          note: note.trim(),
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    }))
-    setShowModal(false)
-    resetForm()
+    setSubmitting(true)
+    setError('')
+    try {
+      await addExpense({
+        tripId,
+        payerMemberId: payerId,
+        amount: parsedAmount,
+        currency,
+        category,
+        note: note.trim(),
+        participantMemberIds: participantIds,
+      })
+      await onReload()
+      setShowModal(false)
+      resetForm()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '新增支出失敗')
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   const sortedExpenses = [...trip.expenses].sort(
@@ -178,8 +184,9 @@ export function ExpensesTab({ trip, updateTrip, currentMemberId }: ExpensesTabPr
             onChange={(e) => setNote(e.target.value)}
             rows={2}
           />
-          <Button fullWidth onClick={handleAdd}>
-            新增支出
+          {error && <p className="form-error-msg">{error}</p>}
+          <Button fullWidth onClick={handleAdd} disabled={submitting}>
+            {submitting ? '新增中...' : '新增支出'}
           </Button>
         </div>
       </Modal>

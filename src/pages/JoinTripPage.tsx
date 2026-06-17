@@ -3,8 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { getTrip, getSessionForTrip, saveTrip, setSession } from '../utils/storage'
-import { createId } from '../utils/id'
+import { fetchTripByCode, joinTrip } from '../services/tripService'
+import { hasSessionForTrip, setSession } from '../utils/storage'
 
 export function JoinTripPage() {
   const navigate = useNavigate()
@@ -13,6 +13,11 @@ export function JoinTripPage() {
   const [code, setCode] = useState(urlCode)
   const [nickname, setNickname] = useState('')
   const [error, setError] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [checkingTrip, setCheckingTrip] = useState(!!urlCode)
+  const [tripFound, setTripFound] = useState<boolean | null>(null)
+  const [tripId, setTripId] = useState<string | null>(null)
+  const [tripName, setTripName] = useState('')
 
   useEffect(() => {
     if (urlCode) setCode(urlCode)
@@ -20,13 +25,52 @@ export function JoinTripPage() {
 
   useEffect(() => {
     if (!urlCode) return
-    const existing = getSessionForTrip(urlCode)
-    if (existing) {
-      navigate(`/trip/${existing.trip.code}`, { replace: true })
+    if (hasSessionForTrip(urlCode)) {
+      navigate(`/trip/${urlCode}`, { replace: true })
     }
   }, [urlCode, navigate])
 
-  const handleJoin = () => {
+  useEffect(() => {
+    const trimmedCode = code.trim().toUpperCase()
+    if (!trimmedCode) {
+      setCheckingTrip(false)
+      setTripFound(null)
+      setTripId(null)
+      return
+    }
+
+    let cancelled = false
+    setCheckingTrip(true)
+
+    fetchTripByCode(trimmedCode)
+      .then((trip) => {
+        if (cancelled) return
+        if (trip) {
+          setTripFound(true)
+          setTripId(trip.id)
+          setTripName(trip.name)
+        } else {
+          setTripFound(false)
+          setTripId(null)
+          setTripName('')
+        }
+      })
+      .catch(() => {
+        if (cancelled) return
+        setTripFound(false)
+        setTripId(null)
+        setTripName('')
+      })
+      .finally(() => {
+        if (!cancelled) setCheckingTrip(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [code])
+
+  const handleJoin = async () => {
     setError('')
     const trimmedCode = code.trim().toUpperCase()
     const trimmedNickname = nickname.trim()
@@ -40,37 +84,52 @@ export function JoinTripPage() {
       return
     }
 
-    const trip = getTrip(trimmedCode)
-    if (!trip) {
-      setError('找不到此旅行代碼，請確認是否正確')
+    if (hasSessionForTrip(trimmedCode)) {
+      navigate(`/trip/${trimmedCode}`)
       return
     }
 
-    const existingSession = getSessionForTrip(trimmedCode)
-    if (existingSession) {
-      navigate(`/trip/${trip.code}`)
-      return
-    }
+    setSubmitting(true)
+    try {
+      let resolvedTripId = tripId
+      if (!resolvedTripId) {
+        const trip = await fetchTripByCode(trimmedCode)
+        if (!trip) {
+          setError('找不到此旅行代碼，請確認是否正確')
+          return
+        }
+        resolvedTripId = trip.id
+      }
 
-    const memberId = createId()
-    trip.members.push({
-      id: memberId,
-      nickname: trimmedNickname,
-      isHost: false,
-      joinedAt: new Date().toISOString(),
-    })
-    saveTrip(trip)
-    setSession({ tripCode: trip.code, memberId })
-    navigate(`/trip/${trip.code}`)
+      const member = await joinTrip(resolvedTripId, trimmedNickname)
+      setSession({ tripCode: trimmedCode, memberId: member.id })
+      navigate(`/trip/${trimmedCode}`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '加入旅行失敗，請稍後再試')
+    } finally {
+      setSubmitting(false)
+    }
   }
+
+  const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0
 
   return (
     <Layout showBack backTo="/">
       <div className="page">
         <h2 className="page-title">加入旅行</h2>
         <p className="page-desc">
-          {urlCode ? '輸入你的暱稱即可加入這趟旅行' : '輸入朋友分享的旅行代碼和你的暱稱'}
+          {urlCode && tripName
+            ? `加入「${tripName}」`
+            : urlCode
+              ? '輸入你的暱稱即可加入這趟旅行'
+              : '輸入朋友分享的旅行代碼和你的暱稱'}
         </p>
+
+        {checkingTrip && <p className="loading-text">查詢旅行中...</p>}
+
+        {showNotFound && (
+          <p className="form-error-msg">找不到此旅行代碼，請確認是否正確</p>
+        )}
 
         <form
           className="form"
@@ -92,12 +151,18 @@ export function JoinTripPage() {
             value={nickname}
             onChange={(e) => setNickname(e.target.value)}
             autoFocus={!!urlCode}
+            disabled={showNotFound}
           />
 
           {error && <p className="form-error-msg">{error}</p>}
 
-          <Button type="submit" fullWidth size="lg">
-            加入旅行
+          <Button
+            type="submit"
+            fullWidth
+            size="lg"
+            disabled={submitting || checkingTrip || showNotFound}
+          >
+            {submitting ? '加入中...' : '加入旅行'}
           </Button>
         </form>
       </div>

@@ -1,4 +1,4 @@
-export type EditPermission = 'host_only' | 'all_members'
+export type EditPermission = 'owner_only' | 'all_members'
 
 export interface Member {
   id: string
