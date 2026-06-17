@@ -724,6 +724,25 @@ textarea {
   gap: 0.65rem;
 }
 
+.settlement-currency {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.settlement-currency-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-text-muted);
+  padding: 0.25rem 0.25rem 0;
+}
+
+.settlement-currency-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
 .settlement-card {
   text-align: center;
   padding: 1.25rem 1rem;
