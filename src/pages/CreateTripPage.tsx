@@ -6,6 +6,7 @@ import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { createTrip } from '../services/tripService'
 import { getShareLink } from '../utils/tripCode'
+import { getLineShareText } from '../utils/shareText'
 import { setSession } from '../utils/storage'
 
 export function CreateTripPage() {
@@ -17,6 +18,7 @@ export function CreateTripPage() {
   const [endDate, setEndDate] = useState('')
   const [createdCode, setCreatedCode] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [lineCopied, setLineCopied] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
@@ -67,6 +69,13 @@ export function CreateTripPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
+  const handleCopyLineText = async () => {
+    if (!createdCode) return
+    await navigator.clipboard.writeText(getLineShareText(createdCode))
+    setLineCopied(true)
+    setTimeout(() => setLineCopied(false), 2000)
+  }
+
   if (createdCode) {
     return (
       <Layout showBack backTo="/">
@@ -88,6 +97,9 @@ export function CreateTripPage() {
           <div className="page-actions">
             <Button fullWidth onClick={handleCopy}>
               {copied ? '已複製！' : '複製分享連結'}
+            </Button>
+            <Button fullWidth variant="outline" onClick={handleCopyLineText}>
+              {lineCopied ? '已複製！' : '複製 LINE 分享文字'}
             </Button>
             <Button fullWidth variant="secondary" onClick={() => navigate(`/trip/${createdCode}`)}>
               進入旅行房間

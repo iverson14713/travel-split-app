@@ -120,7 +120,7 @@ export function JoinTripPage() {
 
       const member = await joinTrip(resolvedTripId, trimmedNickname)
       setSession({ tripCode: trimmedCode, memberId: member.id })
-      navigate(`/trip/${trimmedCode}`)
+      navigate(`/trip/${trimmedCode}`, { state: { joined: true } })
     } catch (err) {
       setError(err instanceof Error ? err.message : '加入旅行失敗，請稍後再試')
     } finally {
@@ -184,6 +184,10 @@ export function JoinTripPage() {
             {submitting ? '加入中...' : '加入旅行'}
           </Button>
         </form>
+
+        <p className="form-footnote">
+          建議加入後可用 Safari 或 Chrome 開啟，之後比較容易保留狀態。
+        </p>
       </div>
     </Layout>
   )

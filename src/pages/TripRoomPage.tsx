@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
 import { getSession } from '../utils/storage'
@@ -23,9 +23,11 @@ const TABS: { key: Tab; label: string; icon: string }[] = [
 export function TripRoomPage() {
   const { code } = useParams<{ code: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const { trip, loading, error, reload } = useTrip(code)
   const [activeTab, setActiveTab] = useState<Tab>('itinerary')
   const [copied, setCopied] = useState(false)
+  const [showJoinedToast, setShowJoinedToast] = useState(false)
 
   const tripCode = code?.toUpperCase() ?? ''
   const session = getSession()
@@ -39,6 +41,16 @@ export function TripRoomPage() {
       navigate(`/join?code=${tripCode}`, { replace: true })
     }
   }, [loading, hasValidSession, tripCode, navigate])
+
+  useEffect(() => {
+    const joined = (location.state as { joined?: boolean } | null)?.joined === true
+    if (!joined) return
+    setShowJoinedToast(true)
+    const t = setTimeout(() => setShowJoinedToast(false), 3500)
+    // clear state so refresh/back doesn't re-toast
+    navigate(location.pathname, { replace: true, state: null })
+    return () => clearTimeout(t)
+  }, [location.state, location.pathname, navigate])
 
   const handleCopyLink = async () => {
     if (!trip) return
@@ -87,6 +99,11 @@ export function TripRoomPage() {
   return (
     <Layout>
       <div className="trip-room">
+        {showJoinedToast && (
+          <div className="toast toast--success">
+            加入成功！下次點同一個連結會直接進入旅程。
+          </div>
+        )}
         <header className="trip-header">
           <div className="trip-header-info">
             <div className="trip-title-row">

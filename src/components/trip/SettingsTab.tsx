@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { EditPermission, Trip } from '../../types'
 import { archiveTrip, restoreTrip, softDeleteTrip, updateEditPermission, updateMemberName } from '../../services/tripService'
 import { getShareLink } from '../../utils/tripCode'
+import { getLineShareText } from '../../utils/shareText'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
@@ -17,6 +18,7 @@ interface SettingsTabProps {
 
 export function SettingsTab({ trip, tripId, isHost, currentMemberId, onReload }: SettingsTabProps) {
   const [copied, setCopied] = useState(false)
+  const [lineCopied, setLineCopied] = useState(false)
   const [updating, setUpdating] = useState(false)
   const [savingName, setSavingName] = useState(false)
   const [nameError, setNameError] = useState('')
@@ -70,6 +72,12 @@ export function SettingsTab({ trip, tripId, isHost, currentMemberId, onReload }:
     await navigator.clipboard.writeText(shareLink)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleCopyLineText = async () => {
+    await navigator.clipboard.writeText(getLineShareText(trip.code))
+    setLineCopied(true)
+    setTimeout(() => setLineCopied(false), 2000)
   }
 
   const handleArchive = async () => {
@@ -173,6 +181,9 @@ export function SettingsTab({ trip, tripId, isHost, currentMemberId, onReload }:
           </div>
           <Button fullWidth variant="outline" onClick={handleCopy}>
             {copied ? '已複製！' : '複製分享連結'}
+          </Button>
+          <Button fullWidth variant="outline" onClick={handleCopyLineText}>
+            {lineCopied ? '已複製！' : '複製 LINE 分享文字'}
           </Button>
         </Card>
       </section>
