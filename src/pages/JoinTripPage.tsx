@@ -3,8 +3,10 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
-import { getTripAvailabilityByCode, joinTrip } from '../services/tripService'
-import { hasSessionForTrip, setSession } from '../utils/storage'
+import { Select } from '../components/ui/Select'
+import { fetchTripByCode, joinTrip } from '../services/tripService'
+import { getSession, hasSessionForTrip, setSession } from '../utils/storage'
+import type { Member } from '../types'
 
 export function JoinTripPage() {
   const navigate = useNavigate()
@@ -16,9 +18,10 @@ export function JoinTripPage() {
   const [submitting, setSubmitting] = useState(false)
   const [checkingTrip, setCheckingTrip] = useState(!!urlCode)
   const [tripFound, setTripFound] = useState<boolean | null>(null)
-  const [tripId, setTripId] = useState<string | null>(null)
   const [tripName, setTripName] = useState('')
-  const [tripDeleted, setTripDeleted] = useState(false)
+  const [members, setMembers] = useState<Member[]>([])
+  const [selectedMemberId, setSelectedMemberId] = useState('')
+  const [duplicateMember, setDuplicateMember] = useState<Member | null>(null)
 
   useEffect(() => {
     if (urlCode) setCode(urlCode)
@@ -26,7 +29,8 @@ export function JoinTripPage() {
 
   useEffect(() => {
     if (!urlCode) return
-    if (hasSessionForTrip(urlCode)) {
+    const session = getSession()
+    if (session?.tripCode === urlCode.toUpperCase() && session.memberId) {
       navigate(`/trip/${urlCode}`, { replace: true })
     }
   }, [urlCode, navigate])
@@ -36,43 +40,34 @@ export function JoinTripPage() {
     if (!trimmedCode) {
       setCheckingTrip(false)
       setTripFound(null)
-      setTripId(null)
       return
     }
 
     let cancelled = false
     setCheckingTrip(true)
 
-    getTripAvailabilityByCode(trimmedCode)
+    fetchTripByCode(trimmedCode)
       .then((trip) => {
         if (cancelled) return
         if (!trip) {
           setTripFound(false)
-          setTripId(null)
           setTripName('')
-          setTripDeleted(false)
-          return
-        }
-
-        if (trip.deleted) {
-          setTripFound(false)
-          setTripId(null)
-          setTripName(trip.name)
-          setTripDeleted(true)
+          setMembers([])
+          setSelectedMemberId('')
           return
         }
 
         setTripFound(true)
-        setTripId(trip.id)
         setTripName(trip.name)
-        setTripDeleted(false)
+        setMembers(trip.members)
+        setSelectedMemberId(trip.members[0]?.id ?? '')
       })
       .catch(() => {
         if (cancelled) return
         setTripFound(false)
-        setTripId(null)
         setTripName('')
-        setTripDeleted(false)
+        setMembers([])
+        setSelectedMemberId('')
       })
       .finally(() => {
         if (!cancelled) setCheckingTrip(false)
@@ -85,6 +80,7 @@ export function JoinTripPage() {
 
   const handleJoin = async () => {
     setError('')
+    setDuplicateMember(null)
     const trimmedCode = code.trim().toUpperCase()
     const trimmedNickname = nickname.trim()
 
@@ -102,23 +98,23 @@ export function JoinTripPage() {
       return
     }
 
+    const existing = members.find(
+      (m) => m.nickname.trim().toLowerCase() === trimmedNickname.toLowerCase(),
+    )
+    if (existing) {
+      setDuplicateMember(existing)
+      return
+    }
+
     setSubmitting(true)
     try {
-      let resolvedTripId = tripId
-      if (!resolvedTripId) {
-        const trip = await getTripAvailabilityByCode(trimmedCode)
-        if (!trip) {
-          setError('找不到此旅行代碼，請確認是否正確')
-          return
-        }
-        if (trip.deleted) {
-          setError('此旅行已不存在或已被刪除')
-          return
-        }
-        resolvedTripId = trip.id
+      const trip = await fetchTripByCode(trimmedCode)
+      if (!trip) {
+        setError('此旅行已不存在或已被刪除')
+        return
       }
 
-      const member = await joinTrip(resolvedTripId, trimmedNickname)
+      const member = await joinTrip(trip.id, trimmedNickname)
       setSession({ tripCode: trimmedCode, memberId: member.id })
       navigate(`/trip/${trimmedCode}`, { state: { joined: true } })
     } catch (err) {
@@ -128,8 +124,7 @@ export function JoinTripPage() {
     }
   }
 
-  const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0 && !tripDeleted
-  const showDeleted = !checkingTrip && tripDeleted
+  const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0
 
   return (
     <Layout showBack backTo="/">
@@ -145,18 +140,9 @@ export function JoinTripPage() {
 
         {checkingTrip && <p className="loading-text">查詢旅行中...</p>}
 
-        {showNotFound && (
-          <p className="form-error-msg">找不到此旅行代碼，請確認是否正確</p>
-        )}
-        {showDeleted && <p className="form-error-msg">此旅行已不存在或已被刪除</p>}
+        {showNotFound && <p className="form-error-msg">此旅行已不存在或已被刪除</p>}
 
-        <form
-          className="form"
-          onSubmit={(e) => {
-            e.preventDefault()
-            handleJoin()
-          }}
-        >
+        <div className="form">
           <Input
             label="旅行代碼"
             placeholder="例：ABC123"
@@ -164,30 +150,85 @@ export function JoinTripPage() {
             onChange={(e) => setCode(e.target.value.toUpperCase())}
             readOnly={!!urlCode}
           />
-          <Input
-            label="你的暱稱"
-            placeholder="例：小明"
-            value={nickname}
-            onChange={(e) => setNickname(e.target.value)}
-            autoFocus={!!urlCode}
-            disabled={showNotFound || showDeleted}
-          />
+        </div>
 
-          {error && <p className="form-error-msg">{error}</p>}
+        {!showNotFound && tripFound && (
+          <>
+            <section className="card">
+              <h3 className="tab-panel-title">第一次加入</h3>
+              <div className="form" style={{ marginTop: '0.75rem' }}>
+                <Input
+                  label="你的暱稱"
+                  placeholder="例：小明"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  autoFocus={!!urlCode}
+                />
 
-          <Button
-            type="submit"
-            fullWidth
-            size="lg"
-            disabled={submitting || checkingTrip || showNotFound || showDeleted}
-          >
-            {submitting ? '加入中...' : '加入旅行'}
-          </Button>
-        </form>
+                {duplicateMember && (
+                  <div className="settlement-notice" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}>
+                    <span>👀</span>
+                    <p>這個名字已經在旅程中，你是 {duplicateMember.nickname} 嗎？</p>
+                  </div>
+                )}
 
-        <p className="form-footnote">
-          建議加入後可用 Safari 或 Chrome 開啟，之後比較容易保留狀態。
-        </p>
+                {duplicateMember ? (
+                  <div className="page-actions" style={{ marginTop: '0.25rem' }}>
+                    <Button
+                      fullWidth
+                      onClick={() => {
+                        setSession({ tripCode: code.trim().toUpperCase(), memberId: duplicateMember.id })
+                        navigate(`/trip/${code.trim().toUpperCase()}`)
+                      }}
+                    >
+                      我是 {duplicateMember.nickname}，直接進入
+                    </Button>
+                    <Button fullWidth variant="outline" onClick={() => { setDuplicateMember(null); setNickname('') }}>
+                      不是，我要換名字
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    fullWidth
+                    size="lg"
+                    onClick={handleJoin}
+                    disabled={submitting || checkingTrip}
+                  >
+                    {submitting ? '加入中...' : '加入旅程'}
+                  </Button>
+                )}
+
+                {error && <p className="form-error-msg">{error}</p>}
+              </div>
+            </section>
+
+            <section className="card">
+              <h3 className="tab-panel-title">已經加入過？</h3>
+              <p className="settings-hint" style={{ marginTop: '0.25rem' }}>
+                若 LINE 內建瀏覽器狀態遺失，你可以在這裡選擇身分直接進入。
+              </p>
+              <div className="form" style={{ marginTop: '0.75rem' }}>
+                <Select
+                  label="選擇你的身分"
+                  value={selectedMemberId}
+                  onChange={(e) => setSelectedMemberId(e.target.value)}
+                  options={members.map((m) => ({ value: m.id, label: m.nickname + (m.isHost ? '（主揪）' : '') }))}
+                />
+                <Button
+                  fullWidth
+                  onClick={() => {
+                    if (!selectedMemberId) return
+                    setSession({ tripCode: code.trim().toUpperCase(), memberId: selectedMemberId })
+                    navigate(`/trip/${code.trim().toUpperCase()}`)
+                  }}
+                  disabled={!selectedMemberId}
+                >
+                  用這個身分進入
+                </Button>
+              </div>
+            </section>
+          </>
+        )}
       </div>
     </Layout>
   )

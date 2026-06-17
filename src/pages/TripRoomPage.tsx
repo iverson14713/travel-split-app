@@ -101,7 +101,7 @@ export function TripRoomPage() {
       <div className="trip-room">
         {showJoinedToast && (
           <div className="toast toast--success">
-            加入成功！下次點同一個連結會直接進入旅程。
+            加入成功！之後從 LINE 公告點進來會直接進入旅程。
           </div>
         )}
         <header className="trip-header">
