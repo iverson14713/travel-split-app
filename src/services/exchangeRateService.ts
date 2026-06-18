@@ -9,9 +9,14 @@ export interface ExchangeRatesToTwd {
 
 export const FALLBACK_RATE_NOTICE = '目前使用預設估算匯率，可在設定中調整'
 
-const API_BASE = 'https://api.frankfurter.dev/v2/latest'
+const ER_API_BASE = 'https://open.er-api.com/v6/latest'
 const FALLBACK_JPY_TO_TWD = 0.215
 const FALLBACK_USD_TO_TWD = 32
+
+interface ErApiResponse {
+  result?: string
+  rates?: { TWD?: number }
+}
 
 function fallbackRates(): ExchangeRatesToTwd {
   return {
@@ -23,7 +28,7 @@ function fallbackRates(): ExchangeRatesToTwd {
 }
 
 async function fetchRateToTwd(base: string): Promise<number> {
-  const url = `${API_BASE}?base=${encodeURIComponent(base)}&symbols=TWD`
+  const url = `${ER_API_BASE}/${encodeURIComponent(base)}`
 
   let response: Response
   try {
@@ -33,10 +38,15 @@ async function fetchRateToTwd(base: string): Promise<number> {
   }
 
   if (!response.ok) {
-    throw new Error(`Frankfurter API ${response.status} for ${base}/TWD`)
+    throw new Error(`Exchange rate API ${response.status} for ${base}/TWD`)
   }
 
-  const data = (await response.json()) as { rates?: { TWD?: number } }
+  const data = (await response.json()) as ErApiResponse
+  const hasValidPayload = data.result === 'success' || !!data.rates
+  if (!hasValidPayload) {
+    throw new Error(`Invalid exchange rate payload for ${base}/TWD`)
+  }
+
   const rate = data.rates?.TWD
   if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
     throw new Error(`Missing TWD rate for ${base}`)
