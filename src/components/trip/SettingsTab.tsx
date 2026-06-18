@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { EditPermission, Trip } from '../../types'
-import { archiveTrip, restoreTrip, softDeleteTrip, updateEditPermission, updateExchangeRates, updateMemberName } from '../../services/tripService'
-import { fetchLatestExchangeRatesToTwd, FALLBACK_RATE_NOTICE } from '../../services/exchangeRateService'
+import { archiveTrip, restoreTrip, softDeleteTrip, updateEditPermission, updateMemberName } from '../../services/tripService'
+import { ExchangeRateSettings } from './ExchangeRateSettings'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { Button } from '../ui/Button'
@@ -25,12 +25,6 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
   const [nameError, setNameError] = useState('')
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [savingRates, setSavingRates] = useState(false)
-  const [refreshingRates, setRefreshingRates] = useState(false)
-  const [rateError, setRateError] = useState('')
-  const [rateNotice, setRateNotice] = useState('')
-  const [jpyPer100Twd, setJpyPer100Twd] = useState(String(Math.round(trip.jpyToTwdRate * 1000) / 10))
-  const [usdPerTwd, setUsdPerTwd] = useState(String(trip.usdToTwdRate))
   const shareLink = getShareLink(trip.code)
 
   const myMember = useMemo(
@@ -42,11 +36,6 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
   useEffect(() => {
     setMyName(myMember?.nickname ?? '')
   }, [myMember?.nickname])
-
-  useEffect(() => {
-    setJpyPer100Twd(String(Math.round(trip.jpyToTwdRate * 1000) / 10))
-    setUsdPerTwd(String(trip.usdToTwdRate))
-  }, [trip.jpyToTwdRate, trip.usdToTwdRate])
 
   const handlePermissionChange = async (permission: EditPermission) => {
     if (!isHost || trip.editPermission === permission) return
@@ -90,61 +79,6 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
     await navigator.clipboard.writeText(getLineShareText(trip.code))
     setLineCopied(true)
     setTimeout(() => setLineCopied(false), 2000)
-  }
-
-  const handleSaveRates = async () => {
-    setRateError('')
-    setRateNotice('')
-    const jpy100 = parseFloat(jpyPer100Twd)
-    const usd = parseFloat(usdPerTwd)
-
-    if (!Number.isFinite(jpy100) || jpy100 <= 0) {
-      setRateError('請輸入有效的日圓匯率')
-      return
-    }
-    if (!Number.isFinite(usd) || usd <= 0) {
-      setRateError('請輸入有效的美元匯率')
-      return
-    }
-
-    setSavingRates(true)
-    try {
-      await updateExchangeRates(tripId, {
-        jpyToTwdRate: jpy100 / 100,
-        usdToTwdRate: usd,
-      })
-      setRateNotice('匯率已儲存。已建立的舊支出不會自動改變。')
-      await onReload()
-    } catch (err) {
-      setRateError(err instanceof Error ? err.message : '更新匯率失敗')
-    } finally {
-      setSavingRates(false)
-    }
-  }
-
-  const handleRefreshRates = async () => {
-    setRateError('')
-    setRateNotice('')
-    setRefreshingRates(true)
-    try {
-      const rates = await fetchLatestExchangeRatesToTwd()
-      await updateExchangeRates(tripId, {
-        jpyToTwdRate: rates.jpyToTwdRate,
-        usdToTwdRate: rates.usdToTwdRate,
-        exchangeRateSource: rates.source,
-        exchangeRateFetchedAt: rates.fetchedAt,
-      })
-      if (rates.source === 'fallback') {
-        setRateNotice(`${FALLBACK_RATE_NOTICE}。已建立的舊支出不會自動改變。`)
-      } else {
-        setRateNotice('已更新估算匯率。已建立的舊支出不會自動改變。')
-      }
-      await onReload()
-    } catch (err) {
-      setRateError(err instanceof Error ? err.message : '重新抓取匯率失敗')
-    } finally {
-      setRefreshingRates(false)
-    }
   }
 
   const handleArchive = async () => {
@@ -237,52 +171,7 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
 
       <section className="settings-section">
         <h3 className="settings-title">匯率設定</h3>
-        <Card className="settings-card">
-          <p className="settings-hint">
-            台幣金額會依每筆記帳當下的匯率估算。
-            <br />
-            已建立的舊支出不會自動改變。
-          </p>
-          <div className="settings-row">
-            <span className="settings-label">基準幣別</span>
-            <span className="settings-value">TWD 台幣</span>
-          </div>
-          <div className="exchange-rate-row">
-            <span className="exchange-rate-label">100 JPY =</span>
-            <Input
-              type="number"
-              min="0"
-              step="0.1"
-              value={jpyPer100Twd}
-              onChange={(e) => setJpyPer100Twd(e.target.value)}
-            />
-            <span className="exchange-rate-suffix">TWD</span>
-          </div>
-          <div className="exchange-rate-row">
-            <span className="exchange-rate-label">1 USD =</span>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={usdPerTwd}
-              onChange={(e) => setUsdPerTwd(e.target.value)}
-            />
-            <span className="exchange-rate-suffix">TWD</span>
-          </div>
-          {rateError && <p className="form-error-msg">{rateError}</p>}
-          {rateNotice && <p className="settings-hint">{rateNotice}</p>}
-          <Button fullWidth onClick={handleSaveRates} disabled={savingRates || refreshingRates}>
-            {savingRates ? '儲存中...' : '儲存匯率'}
-          </Button>
-          <Button
-            fullWidth
-            variant="outline"
-            onClick={handleRefreshRates}
-            disabled={savingRates || refreshingRates}
-          >
-            {refreshingRates ? '抓取中...' : '重新抓取目前匯率'}
-          </Button>
-        </Card>
+        <ExchangeRateSettings trip={trip} tripId={tripId} onReload={onReload} />
       </section>
 
       <section className="settings-section">

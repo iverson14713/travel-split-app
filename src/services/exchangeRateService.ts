@@ -1,85 +1,156 @@
+import {
+  TRAVEL_CURRENCIES,
+  formatDisplayRateValue,
+  formatRateEstimateLine,
+  getRateUnitLabel,
+} from '../constants/currencies'
+import { formatAmount } from '../utils/settlement'
+
 export type ExchangeRateSource = 'api' | 'fallback'
 
-export interface ExchangeRatesToTwd {
-  jpyToTwdRate: number
-  usdToTwdRate: number
+export type RatesToTwdMap = Record<string, number>
+
+export interface ExchangeRatesResult {
+  ratesToTwd: RatesToTwdMap
   source: ExchangeRateSource
   fetchedAt: string
 }
 
+/** @deprecated Use ExchangeRatesResult */
+export type ExchangeRatesToTwd = ExchangeRatesResult
+
 export const FALLBACK_RATE_NOTICE = '目前使用預設估算匯率，可在設定中調整'
 
-const ER_API_BASE = 'https://open.er-api.com/v6/latest'
-const FALLBACK_JPY_TO_TWD = 0.215
-const FALLBACK_USD_TO_TWD = 32
+const ER_API_URL = 'https://open.er-api.com/v6/latest/TWD'
+
+export const FALLBACK_RATES_TO_TWD: RatesToTwdMap = {
+  TWD: 1,
+  JPY: 0.215,
+  USD: 32,
+  EUR: 35,
+  CNY: 4.4,
+  KRW: 0.023,
+  AUD: 21,
+  HKD: 4.1,
+  SGD: 24,
+  THB: 0.9,
+  VND: 0.00125,
+  GBP: 41,
+  CAD: 23.5,
+  MYR: 6.8,
+  PHP: 0.55,
+  IDR: 0.002,
+}
 
 interface ErApiResponse {
   result?: string
-  rates?: { TWD?: number }
+  rates?: Record<string, number>
 }
 
-function fallbackRates(): ExchangeRatesToTwd {
+function normalizeRatesMap(raw: RatesToTwdMap): RatesToTwdMap {
+  const result: RatesToTwdMap = { ...FALLBACK_RATES_TO_TWD }
+  result.TWD = 1
+
+  for (const currency of TRAVEL_CURRENCIES) {
+    const code = currency.code
+    const value = raw[code]
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      result[code] = value
+    }
+  }
+
+  return result
+}
+
+function fallbackResult(fetchedAt: string): ExchangeRatesResult {
   return {
-    jpyToTwdRate: FALLBACK_JPY_TO_TWD,
-    usdToTwdRate: FALLBACK_USD_TO_TWD,
+    ratesToTwd: { ...FALLBACK_RATES_TO_TWD },
     source: 'fallback',
-    fetchedAt: new Date().toISOString(),
+    fetchedAt,
   }
 }
 
-async function fetchRateToTwd(base: string): Promise<number> {
-  const url = `${ER_API_BASE}/${encodeURIComponent(base)}`
-
-  let response: Response
-  try {
-    response = await fetch(url)
-  } catch {
-    throw new Error(`Network error fetching ${base}/TWD`)
-  }
-
-  if (!response.ok) {
-    throw new Error(`Exchange rate API ${response.status} for ${base}/TWD`)
-  }
-
-  const data = (await response.json()) as ErApiResponse
-  const hasValidPayload = data.result === 'success' || !!data.rates
-  if (!hasValidPayload) {
-    throw new Error(`Invalid exchange rate payload for ${base}/TWD`)
-  }
-
-  const rate = data.rates?.TWD
-  if (typeof rate !== 'number' || !Number.isFinite(rate) || rate <= 0) {
-    throw new Error(`Missing TWD rate for ${base}`)
-  }
-
-  return rate
+export function getRateFromTripMap(
+  currency: string,
+  ratesMap: RatesToTwdMap,
+): number {
+  const code = currency.toUpperCase()
+  if (code === 'TWD') return 1
+  const rate = ratesMap[code]
+  if (typeof rate === 'number' && Number.isFinite(rate) && rate > 0) return rate
+  const fallback = FALLBACK_RATES_TO_TWD[code]
+  if (typeof fallback === 'number' && fallback > 0) return fallback
+  return 1
 }
 
-export async function fetchLatestExchangeRatesToTwd(): Promise<ExchangeRatesToTwd> {
+export async function fetchLatestExchangeRatesToTwd(): Promise<ExchangeRatesResult> {
   const fetchedAt = new Date().toISOString()
 
   try {
-    const [jpyToTwdRate, usdToTwdRate] = await Promise.all([
-      fetchRateToTwd('JPY'),
-      fetchRateToTwd('USD'),
-    ])
+    const response = await fetch(ER_API_URL)
+    if (!response.ok) {
+      throw new Error(`Exchange rate API ${response.status}`)
+    }
+
+    const data = (await response.json()) as ErApiResponse
+    const hasValidPayload = data.result === 'success' || !!data.rates
+    if (!hasValidPayload || !data.rates) {
+      throw new Error('Invalid exchange rate payload')
+    }
+
+    const ratesToTwd: RatesToTwdMap = { TWD: 1 }
+    let missingCount = 0
+
+    for (const currency of TRAVEL_CURRENCIES) {
+      if (currency.code === 'TWD') continue
+      const twdPerForeign = data.rates[currency.code]
+      if (typeof twdPerForeign === 'number' && Number.isFinite(twdPerForeign) && twdPerForeign > 0) {
+        ratesToTwd[currency.code] = 1 / twdPerForeign
+      } else {
+        ratesToTwd[currency.code] = FALLBACK_RATES_TO_TWD[currency.code] ?? 1
+        missingCount++
+      }
+    }
+
+    const allMissing = missingCount === TRAVEL_CURRENCIES.length - 1
+    if (allMissing) {
+      return fallbackResult(fetchedAt)
+    }
 
     return {
-      jpyToTwdRate,
-      usdToTwdRate,
+      ratesToTwd: normalizeRatesMap(ratesToTwd),
       source: 'api',
       fetchedAt,
     }
   } catch {
-    return { ...fallbackRates(), fetchedAt }
+    return fallbackResult(fetchedAt)
+  }
+}
+
+export function buildTwdEstimateHint(
+  currency: string,
+  amount: number,
+  rateToTwd: number,
+): { amountLine: string; rateLine: string } | null {
+  const code = currency.toUpperCase()
+  if (code === 'TWD' || !Number.isFinite(amount) || amount <= 0) return null
+
+  const twdAmount = Math.round(amount * rateToTwd)
+  return {
+    amountLine: `約 TWD ${formatAmount(twdAmount, 'TWD')}`,
+    rateLine: formatRateEstimateLine(code, rateToTwd),
   }
 }
 
 export function formatJpyPer100Twd(jpyToTwdRate: number): string {
-  return (Math.round(jpyToTwdRate * 1000) / 10).toFixed(1)
+  return formatDisplayRateValue('JPY', jpyToTwdRate)
 }
 
 export function formatUsdToTwd(usdToTwdRate: number): string {
-  const rounded = Math.round(usdToTwdRate * 100) / 100
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2)
+  return formatDisplayRateValue('USD', usdToTwdRate)
+}
+
+export function formatRateSummaryLine(code: string, rateToTwd: number): string {
+  const label = getRateUnitLabel(code).replace(' =', '')
+  return `${label} ≈ TWD ${formatDisplayRateValue(code, rateToTwd)}`
 }

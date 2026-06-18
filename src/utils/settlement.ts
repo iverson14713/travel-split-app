@@ -1,4 +1,6 @@
 import type { Expense, Member, SettlementItem, Trip } from '../types'
+import { getCurrencyDecimalDigits } from '../constants/currencies'
+import { FALLBACK_RATES_TO_TWD, getRateFromTripMap } from '../services/exchangeRateService'
 
 export type CurrencyFilter = 'TWD' | 'JPY' | 'USD' | 'ALL'
 export type DisplayMode = 'twd_estimate' | 'original'
@@ -16,17 +18,12 @@ export const OVERVIEW_CURRENCIES: { value: CurrencyFilter; label: string }[] = [
   { value: 'ALL', label: '全部' },
 ]
 
-export interface TripRates {
-  jpyToTwdRate: number
-  usdToTwdRate: number
-}
+export type TripRates = Record<string, number>
 
 const TWD = 'TWD'
 
 export function currencyDecimals(currency: string): number {
-  const c = currency.toUpperCase()
-  if (c === TWD || c === 'JPY' || c === 'KRW') return 0
-  return 2
+  return getCurrencyDecimalDigits(currency)
 }
 
 export function roundAmount(n: number, currency: string): number {
@@ -50,12 +47,17 @@ export function formatAmount(amount: number, currency: string): string {
   })
 }
 
-export function getExchangeRateForCurrency(currency: string, trip: Pick<Trip, 'jpyToTwdRate' | 'usdToTwdRate'>): number {
-  const c = currency.toUpperCase()
-  if (c === TWD) return 1
-  if (c === 'JPY') return trip.jpyToTwdRate
-  if (c === 'USD') return trip.usdToTwdRate
-  return 1
+export function getExchangeRateForCurrency(
+  currency: string,
+  trip: Pick<Trip, 'exchangeRatesToTwd' | 'jpyToTwdRate' | 'usdToTwdRate'>,
+): number {
+  const ratesMap = trip.exchangeRatesToTwd ?? {
+    ...FALLBACK_RATES_TO_TWD,
+    TWD: 1,
+    JPY: trip.jpyToTwdRate,
+    USD: trip.usdToTwdRate,
+  }
+  return getRateFromTripMap(currency, ratesMap)
 }
 
 export function resolveExchangeRateToTwd(
@@ -67,10 +69,10 @@ export function resolveExchangeRateToTwd(
   }
 
   const currency = (exp.currency || TWD).toUpperCase()
-  if (currency === TWD) return 1
-  if (currency === 'JPY') return tripRates?.jpyToTwdRate ?? 0.215
-  if (currency === 'USD') return tripRates?.usdToTwdRate ?? 32
-  return 1
+  if (tripRates) {
+    return getRateFromTripMap(currency, tripRates)
+  }
+  return getRateFromTripMap(currency, FALLBACK_RATES_TO_TWD)
 }
 
 export function toTwdAmount(amount: number, exchangeRateToTwd: number): number {

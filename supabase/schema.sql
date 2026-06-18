@@ -24,6 +24,7 @@ create table if not exists travel_trips (
   usd_to_twd_rate numeric not null default 32,
   exchange_rate_source text not null default 'fallback',
   exchange_rate_fetched_at timestamptz,
+  exchange_rates_to_twd jsonb not null default '{}',
   created_at timestamptz not null default now()
 );
 

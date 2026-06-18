@@ -2,6 +2,7 @@ import { requireSupabase } from '../lib/supabase'
 import { DB_TABLES } from '../lib/database.tables'
 import type { EditPermission, ExchangeRateSource, Expense, ExpenseType, ItineraryItem, Member, Trip, TripStatus } from '../types'
 import { generateTripCode } from '../utils/tripCode'
+import { FALLBACK_RATES_TO_TWD, getRateFromTripMap } from './exchangeRateService'
 
 interface TripRow {
   id: string
@@ -20,6 +21,7 @@ interface TripRow {
   usd_to_twd_rate: number
   exchange_rate_source: ExchangeRateSource
   exchange_rate_fetched_at: string | null
+  exchange_rates_to_twd: Record<string, number> | null
   created_at: string
 }
 
@@ -78,14 +80,32 @@ function mapItinerary(row: ItineraryRow): ItineraryItem {
   }
 }
 
-function mapExpense(row: ExpenseRow, tripRates?: { jpyToTwdRate: number; usdToTwdRate: number }): Expense {
+function normalizeTripExchangeRates(row: TripRow): Record<string, number> {
+  const raw = row.exchange_rates_to_twd
+  if (raw && typeof raw === 'object' && Object.keys(raw).length > 0) {
+    const map: Record<string, number> = { ...FALLBACK_RATES_TO_TWD, TWD: 1 }
+    for (const [code, value] of Object.entries(raw)) {
+      const num = Number(value)
+      if (Number.isFinite(num) && num > 0) map[code.toUpperCase()] = num
+    }
+    map.JPY = map.JPY ?? Number(row.jpy_to_twd_rate ?? 0.215)
+    map.USD = map.USD ?? Number(row.usd_to_twd_rate ?? 32)
+    return map
+  }
+
+  return {
+    ...FALLBACK_RATES_TO_TWD,
+    TWD: 1,
+    JPY: Number(row.jpy_to_twd_rate ?? 0.215),
+    USD: Number(row.usd_to_twd_rate ?? 32),
+  }
+}
+
+function mapExpense(row: ExpenseRow, exchangeRatesToTwd: Record<string, number>): Expense {
   const currency = (row.currency || 'TWD').toUpperCase()
   let exchangeRateToTwd = row.exchange_rate_to_twd != null ? Number(row.exchange_rate_to_twd) : NaN
   if (!Number.isFinite(exchangeRateToTwd) || exchangeRateToTwd <= 0) {
-    if (currency === 'TWD') exchangeRateToTwd = 1
-    else if (currency === 'JPY') exchangeRateToTwd = tripRates?.jpyToTwdRate ?? 0.215
-    else if (currency === 'USD') exchangeRateToTwd = tripRates?.usdToTwdRate ?? 32
-    else exchangeRateToTwd = 1
+    exchangeRateToTwd = getRateFromTripMap(currency, exchangeRatesToTwd)
   }
 
   return {
@@ -109,10 +129,9 @@ function mapTrip(
   itinerary: ItineraryRow[],
   expenses: ExpenseRow[],
 ): Trip {
-  const tripRates = {
-    jpyToTwdRate: Number(row.jpy_to_twd_rate ?? 0.215),
-    usdToTwdRate: Number(row.usd_to_twd_rate ?? 32),
-  }
+  const exchangeRatesToTwd = normalizeTripExchangeRates(row)
+  const jpyToTwdRate = exchangeRatesToTwd.JPY ?? Number(row.jpy_to_twd_rate ?? 0.215)
+  const usdToTwdRate = exchangeRatesToTwd.USD ?? Number(row.usd_to_twd_rate ?? 32)
 
   return {
     id: row.id,
@@ -126,13 +145,14 @@ function mapTrip(
     archivedAt: row.archived_at ?? undefined,
     editPermission: row.edit_permission as EditPermission,
     baseCurrency: row.base_currency ?? 'TWD',
-    jpyToTwdRate: tripRates.jpyToTwdRate,
-    usdToTwdRate: tripRates.usdToTwdRate,
+    jpyToTwdRate,
+    usdToTwdRate,
     exchangeRateSource: row.exchange_rate_source ?? 'fallback',
     exchangeRateFetchedAt: row.exchange_rate_fetched_at ?? undefined,
+    exchangeRatesToTwd,
     members: members.map(mapMember),
     itinerary: itinerary.map(mapItinerary),
-    expenses: expenses.map((expenseRow) => mapExpense(expenseRow, tripRates)),
+    expenses: expenses.map((expenseRow) => mapExpense(expenseRow, exchangeRatesToTwd)),
     createdAt: row.created_at,
   }
 }
@@ -212,6 +232,7 @@ export interface CreateTripInput {
   startDate: string
   endDate: string
   ownerName?: string
+  exchangeRatesToTwd?: Record<string, number>
   jpyToTwdRate?: number
   usdToTwdRate?: number
   exchangeRateSource?: ExchangeRateSource
@@ -227,6 +248,13 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
   const db = requireSupabase()
   const code = await generateUniqueCode()
 
+  const exchangeRatesToTwd = input.exchangeRatesToTwd ?? {
+    ...FALLBACK_RATES_TO_TWD,
+    TWD: 1,
+    JPY: input.jpyToTwdRate ?? 0.215,
+    USD: input.usdToTwdRate ?? 32,
+  }
+
   const { data: tripRow, error: tripError } = await db
     .from(DB_TABLES.trips)
     .insert({
@@ -237,8 +265,9 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
       end_date: input.endDate,
       edit_permission: 'owner_only',
       base_currency: 'TWD',
-      jpy_to_twd_rate: input.jpyToTwdRate ?? 0.215,
-      usd_to_twd_rate: input.usdToTwdRate ?? 32,
+      jpy_to_twd_rate: exchangeRatesToTwd.JPY ?? input.jpyToTwdRate ?? 0.215,
+      usd_to_twd_rate: exchangeRatesToTwd.USD ?? input.usdToTwdRate ?? 32,
+      exchange_rates_to_twd: exchangeRatesToTwd,
       exchange_rate_source: input.exchangeRateSource ?? 'fallback',
       exchange_rate_fetched_at: input.exchangeRateFetchedAt ?? null,
     })
@@ -370,17 +399,19 @@ export async function updateEditPermission(
 export async function updateExchangeRates(
   tripId: string,
   rates: {
-    jpyToTwdRate: number
-    usdToTwdRate: number
+    exchangeRatesToTwd: Record<string, number>
     exchangeRateSource?: ExchangeRateSource
     exchangeRateFetchedAt?: string
   },
 ): Promise<void> {
   const db = requireSupabase()
+  const jpyToTwdRate = rates.exchangeRatesToTwd.JPY ?? 0.215
+  const usdToTwdRate = rates.exchangeRatesToTwd.USD ?? 32
 
-  const payload: Record<string, string | number> = {
-    jpy_to_twd_rate: rates.jpyToTwdRate,
-    usd_to_twd_rate: rates.usdToTwdRate,
+  const payload: Record<string, string | number | Record<string, number>> = {
+    exchange_rates_to_twd: rates.exchangeRatesToTwd,
+    jpy_to_twd_rate: jpyToTwdRate,
+    usd_to_twd_rate: usdToTwdRate,
     last_activity_at: new Date().toISOString(),
   }
 

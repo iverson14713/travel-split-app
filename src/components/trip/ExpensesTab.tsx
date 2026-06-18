@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { Trip } from '../../types'
+import { formatAmount, resolveExchangeRateToTwd, toTwdAmount } from '../../utils/settlement'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { ExpenseUpsertModal } from './ExpenseUpsertModal'
@@ -43,16 +44,26 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload }: Expense
         </div>
       ) : (
         <div className="expense-list">
-          {sortedExpenses.map((expense) => (
+          {sortedExpenses.map((expense) => {
+            const currency = (expense.currency || 'TWD').toUpperCase()
+            const twdEstimate =
+              currency !== 'TWD'
+                ? toTwdAmount(expense.amount, resolveExchangeRateToTwd(expense, trip.exchangeRatesToTwd))
+                : null
+
+            return (
             <Card key={expense.id} className="expense-card">
               <div className="expense-top">
                 <span className="expense-amount">
-                  {expense.currency} {expense.amount.toLocaleString()}
+                  {currency} {formatAmount(expense.amount, currency)}
                 </span>
                 <span className="expense-category">
                   {expense.type === 'transfer' ? '還款/轉帳' : expense.category}
                 </span>
               </div>
+              {twdEstimate != null && (
+                <p className="expense-twd-estimate">約 TWD {formatAmount(twdEstimate, 'TWD')}</p>
+              )}
               {expense.type === 'transfer' ? (
                 <p className="expense-payer">
                   {getMemberName(expense.payerId)} → {getMemberName(expense.receiverId ?? '')}
@@ -68,7 +79,8 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload }: Expense
               )}
               {expense.note && <p className="expense-note">{expense.note}</p>}
             </Card>
-          ))}
+            )
+          })}
         </div>
       )}
 

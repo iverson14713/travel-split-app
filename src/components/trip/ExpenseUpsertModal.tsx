@@ -1,23 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ExpenseType, Trip } from '../../types'
+import { TRAVEL_CURRENCIES } from '../../constants/currencies'
 import { addExpense } from '../../services/tripService'
-import {
-  formatAmount,
-  getExchangeRateForCurrency,
-  toTwdAmount,
-} from '../../utils/settlement'
-import { formatJpyPer100Twd, formatUsdToTwd } from '../../services/exchangeRateService'
+import { buildTwdEstimateHint } from '../../services/exchangeRateService'
+import { getExchangeRateForCurrency } from '../../utils/settlement'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
 import { Button } from '../ui/Button'
 
-const CURRENCIES = [
-  { value: 'TWD', label: 'TWD 新台幣' },
-  { value: 'JPY', label: 'JPY 日圓' },
-  { value: 'USD', label: 'USD 美元' },
-]
+const CURRENCY_OPTIONS = TRAVEL_CURRENCIES.map((c) => ({ value: c.code, label: c.label }))
 
 const CATEGORIES = [
   { value: '交通', label: '交通' },
@@ -86,26 +79,7 @@ export function ExpenseUpsertModal({
 
   const twdEstimateHint = useMemo(() => {
     const parsedAmount = parseFloat(amount)
-    if (!parsedAmount || parsedAmount <= 0) return null
-
-    const c = currency.toUpperCase()
-    if (c === 'TWD') return null
-
-    const twdAmount = toTwdAmount(parsedAmount, exchangeRateToTwd)
-    if (c === 'JPY') {
-      const jpyPer100 = formatJpyPer100Twd(exchangeRateToTwd)
-      return {
-        amountLine: `約 TWD ${formatAmount(twdAmount, 'TWD')}`,
-        rateLine: `以 100 JPY = TWD ${jpyPer100} 估算`,
-      }
-    }
-    if (c === 'USD') {
-      return {
-        amountLine: `約 TWD ${formatAmount(twdAmount, 'TWD')}`,
-        rateLine: `以 1 USD = TWD ${formatUsdToTwd(exchangeRateToTwd)} 估算`,
-      }
-    }
-    return null
+    return buildTwdEstimateHint(currency, parsedAmount, exchangeRateToTwd)
   }, [amount, currency, exchangeRateToTwd])
 
   useEffect(() => {
@@ -193,7 +167,7 @@ export function ExpenseUpsertModal({
           label="幣別"
           value={currency}
           onChange={(e) => setCurrency(e.target.value)}
-          options={CURRENCIES}
+          options={CURRENCY_OPTIONS}
         />
 
         {twdEstimateHint && (

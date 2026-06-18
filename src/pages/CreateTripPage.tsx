@@ -7,10 +7,9 @@ import { Card } from '../components/ui/Card'
 import { createTrip } from '../services/tripService'
 import {
   fetchLatestExchangeRatesToTwd,
-  formatJpyPer100Twd,
-  formatUsdToTwd,
+  formatRateSummaryLine,
   FALLBACK_RATE_NOTICE,
-  type ExchangeRatesToTwd,
+  type ExchangeRatesResult,
 } from '../services/exchangeRateService'
 import { getShareLink } from '../utils/tripCode'
 import { getLineShareText } from '../utils/shareText'
@@ -24,7 +23,7 @@ export function CreateTripPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [createdCode, setCreatedCode] = useState<string | null>(null)
-  const [createdRates, setCreatedRates] = useState<ExchangeRatesToTwd | null>(null)
+  const [createdRates, setCreatedRates] = useState<ExchangeRatesResult | null>(null)
   const [copied, setCopied] = useState(false)
   const [lineCopied, setLineCopied] = useState(false)
   const [error, setError] = useState('')
@@ -58,8 +57,9 @@ export function CreateTripPage() {
         destination: destination.trim(),
         startDate,
         endDate,
-        jpyToTwdRate: rates.jpyToTwdRate,
-        usdToTwdRate: rates.usdToTwdRate,
+        exchangeRatesToTwd: rates.ratesToTwd,
+        jpyToTwdRate: rates.ratesToTwd.JPY,
+        usdToTwdRate: rates.ratesToTwd.USD,
         exchangeRateSource: rates.source,
         exchangeRateFetchedAt: rates.fetchedAt,
       })
@@ -119,9 +119,9 @@ export function CreateTripPage() {
             <p className="page-tip">
               目前估算匯率：
               <br />
-              100 JPY ≈ TWD {formatJpyPer100Twd(createdRates.jpyToTwdRate)}
+              {formatRateSummaryLine('JPY', createdRates.ratesToTwd.JPY)}
               <br />
-              1 USD ≈ TWD {formatUsdToTwd(createdRates.usdToTwdRate)}
+              {formatRateSummaryLine('USD', createdRates.ratesToTwd.USD)}
               {createdRates.source === 'fallback' && (
                 <>
                   <br />

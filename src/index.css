@@ -973,6 +973,12 @@ textarea {
   font-weight: 500;
 }
 
+.expense-twd-estimate {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-top: 0.15rem;
+}
+
 .expense-payer,
 .expense-participants {
   font-size: 0.85rem;
@@ -1197,6 +1203,23 @@ textarea {
 
 .expense-rate-hint p + p {
   margin-top: 0.15rem;
+}
+
+.exchange-rate-toggle {
+  width: 100%;
+  padding: 0.5rem 0;
+  border: none;
+  background: transparent;
+  color: var(--color-primary-dark);
+  font-family: var(--font);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+}
+
+.exchange-rate-toggle:hover {
+  color: var(--color-primary);
 }
 
 .exchange-rate-row {
