@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Trip } from '../../types'
 import { getTripDays } from '../../utils/dates'
+import type { ReloadOptions } from '../../hooks/useTrip'
 import { addItineraryItem } from '../../services/tripService'
 import { useItineraryRealtime } from '../../hooks/useItineraryRealtime'
 import { Button } from '../ui/Button'
@@ -9,13 +10,14 @@ import { Textarea } from '../ui/Textarea'
 import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import { Card } from '../ui/Card'
+import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 
 interface ItineraryTabProps {
   trip: Trip
   tripId: string
   memberId?: string
   canEdit: boolean
-  onReload: () => Promise<void>
+  onReload: (options?: ReloadOptions) => Promise<void>
 }
 
 function getDefaultActiveDay(days: ReturnType<typeof getTripDays>, itinerary: Trip['itinerary']): number {
@@ -37,7 +39,9 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
 
   const chipRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
 
-  useItineraryRealtime(tripId, onReload)
+  useItineraryRealtime(tripId, () => {
+    void onReload({ silent: true })
+  })
 
   const itemsByDay = useMemo(() => {
     const map = new Map<number, Trip['itinerary']>()
@@ -98,7 +102,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
         createdBy: memberId,
       })
       setActiveDay(selectedDay)
-      await onReload()
+      await onReload({ silent: true })
       setShowModal(false)
       resetForm()
     } catch (err) {
@@ -108,16 +112,19 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
     }
   }
 
+  const isArchived = trip.status === 'archived'
+  const canAdd = canEdit && !isArchived
+
   if (!activeDayInfo) {
     return null
   }
 
   return (
     <div className="tab-panel tab-panel--itinerary">
-      {trip.status === 'archived' && (
+      {isArchived && (
         <div className="archived-hint">
           <span>📌</span>
-          <p>這趟旅行已封存，新增內容會自動恢復為進行中</p>
+          <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
         </div>
       )}
 
@@ -154,7 +161,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
               {activeDayInfo.shortDate} {activeDayInfo.weekday} · {activeItems.length} 個行程
             </p>
           </div>
-          {canEdit && (
+          {canAdd && (
             <Button size="sm" variant="ghost" onClick={() => openAdd(activeDay)}>
               + 新增
             </Button>
@@ -165,7 +172,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
           <div className="day-empty-state">
             <p className="day-empty-state-title">還沒有行程</p>
             <p className="day-empty-state-hint">
-              {canEdit ? '點「+ 新增」加入第一個行程' : '目前這天還沒有行程'}
+              {canAdd ? '點「+ 新增」加入第一個行程' : isArchived ? ARCHIVED_VIEW_ONLY_HINT : '目前這天還沒有行程'}
             </p>
           </div>
         ) : (

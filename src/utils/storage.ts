@@ -1,4 +1,4 @@
-import type { RecentTrip, UserSession } from '../types'
+import type { RecentTrip, TripStatus, UserSession } from '../types'
 
 const SESSION_KEY = 'travel-split-session'
 const RECENT_TRIPS_KEY = 'travel-split-recent-trips'
@@ -42,6 +42,7 @@ export function recordRecentTrip(
   entry: Omit<RecentTrip, 'lastOpenedAt'> & { lastOpenedAt?: string },
 ): void {
   const now = entry.lastOpenedAt ?? new Date().toISOString()
+  const existing = getRecentTrips().find((t) => t.tripCode === entry.tripCode.toUpperCase())
   const normalized: RecentTrip = {
     tripCode: entry.tripCode.toUpperCase(),
     tripName: entry.tripName,
@@ -49,11 +50,22 @@ export function recordRecentTrip(
     memberId: entry.memberId,
     memberName: entry.memberName,
     lastOpenedAt: now,
+    status: entry.status ?? existing?.status ?? 'active',
   }
 
-  const existing = getRecentTrips()
-  const others = existing.filter((t) => t.tripCode !== normalized.tripCode)
+  const others = getRecentTrips().filter((t) => t.tripCode !== normalized.tripCode)
   const updated = [normalized, ...others].slice(0, MAX_RECENT_TRIPS)
 
+  localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
+}
+
+export function updateRecentTripStatus(tripCode: string, status: TripStatus): void {
+  const normalizedCode = tripCode.toUpperCase()
+  const trips = getRecentTrips()
+  if (!trips.some((t) => t.tripCode === normalizedCode)) return
+
+  const updated = trips.map((t) =>
+    t.tripCode === normalizedCode ? { ...t, status } : t,
+  )
   localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
 }

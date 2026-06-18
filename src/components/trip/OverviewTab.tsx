@@ -11,6 +11,7 @@ import {
 } from '../../utils/settlement'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
+import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 
 interface OverviewTabProps {
   trip: Trip
@@ -82,7 +83,7 @@ export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: Overvie
       {trip.status === 'archived' && (
         <div className="archived-hint">
           <span>📌</span>
-          <p>這趟旅行已封存，新增內容會自動恢復為進行中</p>
+          <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
         </div>
       )}
 

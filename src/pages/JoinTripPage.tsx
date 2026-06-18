@@ -8,6 +8,7 @@ import { MemberJoinBlockedCard } from '../components/trip/MemberJoinBlockedCard'
 import { fetchTripByCode, joinTrip } from '../services/tripService'
 import { checkMemberLimit } from '../services/tripUnlockService'
 import { getSession, hasSessionForTrip, setSession, recordRecentTrip } from '../utils/storage'
+import { getActiveMembers } from '../utils/members'
 import type { Member, Trip } from '../types'
 
 export function JoinTripPage() {
@@ -67,8 +68,9 @@ export function JoinTripPage() {
         setFetchedTrip(trip)
         setTripName(trip.name)
         setTripDestination(trip.destination)
-        setMembers(trip.members)
-        setSelectedMemberId(trip.members[0]?.id ?? '')
+        const activeMembers = getActiveMembers(trip.members)
+        setMembers(activeMembers)
+        setSelectedMemberId(activeMembers[0]?.id ?? '')
       })
       .catch(() => {
         if (cancelled) return

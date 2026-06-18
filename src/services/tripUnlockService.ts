@@ -1,5 +1,6 @@
 import { ESTIMATED_MEMBER_FIVE_PLUS, FREE_LIMITS, type EstimatedMemberCount } from '../constants/freeLimits'
 import type { Trip } from '../types'
+import { getActiveMemberCount } from '../utils/members'
 import { getTripDays } from '../utils/dates'
 
 export type TripUnlockStatus = 'free' | 'unlocked' | 'developer_unlocked'
@@ -128,7 +129,7 @@ export function getTripUsageLimits(trip: Trip): TripUsageSnapshot {
   const isUnlimited = status !== 'free'
 
   return {
-    members: trip.members.length,
+    members: getActiveMemberCount(trip.members),
     days: getTripDayCount(trip.startDate, trip.endDate),
     expenses: countTripExpenses(trip),
     maxMembers: isUnlimited ? Infinity : FREE_LIMITS.maxMembers,
@@ -152,7 +153,7 @@ export function checkCreateMemberPlan(count: EstimatedMemberCount): UpgradeReaso
 
 export function checkMemberLimit(trip: Trip): UpgradeReason | null {
   if (isTripUnlocked(trip.id)) return null
-  if (trip.members.length >= FREE_LIMITS.maxMembers) return 'member_limit'
+  if (getActiveMemberCount(trip.members) >= FREE_LIMITS.maxMembers) return 'member_limit'
   return null
 }
 

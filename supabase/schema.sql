@@ -35,6 +35,9 @@ create table if not exists travel_members (
   name text not null,
   role text not null default 'member'
     check (role in ('owner', 'member')),
+  status text not null default 'active'
+    check (status in ('active', 'removed')),
+  removed_at timestamptz,
   created_at timestamptz not null default now()
 );
 

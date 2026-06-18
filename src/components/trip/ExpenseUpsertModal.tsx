@@ -7,6 +7,7 @@ import { buildTwdEstimateHint } from '../../services/exchangeRateService'
 import { checkExpenseLimit } from '../../services/tripUnlockService'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 import { getExchangeRateForCurrency } from '../../utils/settlement'
+import { getActiveMembers, getSelectableMembers } from '../../utils/members'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
 import { Input } from '../ui/Input'
@@ -53,15 +54,20 @@ export function ExpenseUpsertModal({
   onSaved,
   onUpgradeRequired,
 }: ExpenseUpsertModalProps) {
-  const defaultPayer = currentMemberId ?? trip.members[0]?.id ?? ''
+  const activeMembers = useMemo(() => getActiveMembers(trip.members), [trip.members])
+  const selectableMembers = useMemo(
+    () => getSelectableMembers(trip.members, expense),
+    [trip.members, expense],
+  )
+  const defaultPayer = currentMemberId ?? activeMembers[0]?.id ?? selectableMembers[0]?.id ?? ''
 
   const memberOptions = useMemo(
     () =>
-      trip.members.map((m) => ({
+      selectableMembers.map((m) => ({
         value: m.id,
         label: m.nickname + (m.isHost ? '（主揪）' : ''),
       })),
-    [trip.members],
+    [selectableMembers],
   )
 
   const [type, setType] = useState<ExpenseType>('expense')
@@ -69,7 +75,7 @@ export function ExpenseUpsertModal({
   const [currency, setCurrency] = useState('TWD')
   const [payerId, setPayerId] = useState(defaultPayer)
   const [receiverId, setReceiverId] = useState('')
-  const [participantIds, setParticipantIds] = useState<string[]>(trip.members.map((m) => m.id))
+  const [participantIds, setParticipantIds] = useState<string[]>(activeMembers.map((m) => m.id))
   const [category, setCategory] = useState(DEFAULT_EXPENSE_CATEGORY)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -96,7 +102,9 @@ export function ExpenseUpsertModal({
       setCurrency((expense.currency || 'TWD').toUpperCase())
       setPayerId(expense.payerId)
       setReceiverId(expense.receiverId ?? '')
-      setParticipantIds(expense.participantIds.length > 0 ? expense.participantIds : trip.members.map((m) => m.id))
+      setParticipantIds(
+        expense.participantIds.length > 0 ? expense.participantIds : activeMembers.map((m) => m.id),
+      )
       setCategory(expense.type === 'transfer' ? '還款' : expense.category)
       setNote(expense.note ?? '')
     } else {
@@ -105,14 +113,14 @@ export function ExpenseUpsertModal({
       setCurrency((preset?.currency ?? 'TWD').toUpperCase())
       setPayerId(preset?.payerMemberId ?? defaultPayer)
       setReceiverId(preset?.receiverMemberId ?? '')
-      setParticipantIds(trip.members.map((m) => m.id))
+      setParticipantIds(activeMembers.map((m) => m.id))
       setCategory(DEFAULT_EXPENSE_CATEGORY)
       setNote('')
     }
 
     setError('')
     setSubmitting(false)
-  }, [open, preset, expense, defaultPayer, trip.members])
+  }, [open, preset, expense, defaultPayer, activeMembers])
 
   const toggleParticipant = (id: string) => {
     setParticipantIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
@@ -235,7 +243,7 @@ export function ExpenseUpsertModal({
             <div className="form-field">
               <span className="form-label">參與分攤成員</span>
               <div className="checkbox-group">
-                {trip.members.map((m) => (
+                {activeMembers.map((m) => (
                   <label key={m.id} className="checkbox-item">
                     <input
                       type="checkbox"

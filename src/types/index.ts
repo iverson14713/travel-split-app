@@ -6,11 +6,15 @@ export type TripStatus = 'active' | 'archived'
 
 export type ExchangeRateSource = 'api' | 'fallback'
 
+export type MemberStatus = 'active' | 'removed'
+
 export interface Member {
   id: string
   nickname: string
   isHost: boolean
   joinedAt: string
+  status: MemberStatus
+  removedAt?: string
 }
 
 export interface ItineraryItem {
@@ -72,6 +76,7 @@ export interface RecentTrip {
   memberId: string
   memberName: string
   lastOpenedAt: string
+  status?: TripStatus
 }
 
 export interface SettlementItem {

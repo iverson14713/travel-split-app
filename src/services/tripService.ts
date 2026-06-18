@@ -1,6 +1,6 @@
 import { requireSupabase } from '../lib/supabase'
 import { DB_TABLES } from '../lib/database.tables'
-import type { EditPermission, ExchangeRateSource, Expense, ExpenseType, ItineraryItem, Member, Trip, TripStatus } from '../types'
+import type { EditPermission, ExchangeRateSource, Expense, ExpenseType, ItineraryItem, Member, MemberStatus, Trip, TripStatus } from '../types'
 import { generateTripCode } from '../utils/tripCode'
 import { FALLBACK_RATES_TO_TWD, getRateFromTripMap } from './exchangeRateService'
 
@@ -31,6 +31,8 @@ interface MemberRow {
   trip_id: string
   name: string
   role: 'owner' | 'member'
+  status?: MemberStatus | null
+  removed_at?: string | null
   created_at: string
 }
 
@@ -62,11 +64,16 @@ interface ExpenseRow {
 }
 
 function mapMember(row: MemberRow): Member {
+  const status: MemberStatus =
+    row.status === 'removed' || row.removed_at != null ? 'removed' : 'active'
+
   return {
     id: row.id,
     nickname: row.name,
     isHost: row.role === 'owner',
     joinedAt: row.created_at,
+    status,
+    removedAt: row.removed_at ?? undefined,
   }
 }
 
@@ -431,6 +438,34 @@ export async function updateMemberName(memberId: string, name: string): Promise<
 
   if (error) throw error
   await touchTripActivity(data.trip_id)
+}
+
+export async function removeMember(memberId: string, tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const now = new Date().toISOString()
+
+  const { data: memberRow, error: fetchError } = await db
+    .from(DB_TABLES.members)
+    .select('id, role, status, removed_at')
+    .eq('id', memberId)
+    .eq('trip_id', tripId)
+    .maybeSingle()
+
+  if (fetchError) throw fetchError
+  if (!memberRow) throw new Error('找不到此成員')
+  if (memberRow.role === 'owner') throw new Error('無法移除主揪')
+  if (memberRow.status === 'removed' || memberRow.removed_at != null) {
+    throw new Error('此成員已不在旅程中')
+  }
+
+  const { error } = await db
+    .from(DB_TABLES.members)
+    .update({ status: 'removed', removed_at: now })
+    .eq('id', memberId)
+    .eq('trip_id', tripId)
+
+  if (error) throw error
+  await touchTripActivity(tripId)
 }
 
 export async function updateEditPermission(

@@ -37,15 +37,24 @@ function RateInputRow({
   code,
   value,
   onChange,
+  disabled = false,
 }: {
   code: string
   value: string
   onChange: (value: string) => void
+  disabled?: boolean
 }) {
   return (
     <div className="exchange-rate-row">
       <span className="exchange-rate-label">{getRateUnitLabel(code)}</span>
-      <Input type="number" min="0" step="any" value={value} onChange={(e) => onChange(e.target.value)} />
+      <Input
+        type="number"
+        min="0"
+        step="any"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        disabled={disabled}
+      />
       <span className="exchange-rate-suffix">TWD</span>
     </div>
   )
@@ -65,6 +74,7 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
     () => [...PRIMARY_RATE_CURRENCY_CODES, ...OTHER_RATE_CURRENCY_CODES],
     [],
   )
+  const isArchived = trip.status === 'archived'
 
   useEffect(() => {
     setDisplayValues(buildDisplayValues(trip.exchangeRatesToTwd))
@@ -149,6 +159,7 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
           code={code}
           value={displayValues[code] ?? ''}
           onChange={(value) => setDisplayValues((prev) => ({ ...prev, [code]: value }))}
+          disabled={isArchived}
         />
       ))}
 
@@ -176,6 +187,7 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
                 code={code}
                 value={displayValues[code] ?? ''}
                 onChange={(value) => setDisplayValues((prev) => ({ ...prev, [code]: value }))}
+                disabled={isArchived}
               />
             ))}
           </div>
@@ -184,23 +196,29 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
 
       {rateError && <p className="form-error-msg">{rateError}</p>}
       {rateNotice && <p className="settings-hint settings-notice">{rateNotice}</p>}
-      <Button
-        type="button"
-        fullWidth
-        onClick={handleSaveRates}
-        disabled={savingRates || refreshingRates}
-      >
-        {savingRates ? '儲存中...' : '儲存匯率'}
-      </Button>
-      <Button
-        type="button"
-        fullWidth
-        variant="outline"
-        onClick={handleRefreshRates}
-        disabled={savingRates || refreshingRates}
-      >
-        {refreshingRates ? '抓取中...' : '重新抓取目前匯率'}
-      </Button>
+      {isArchived ? (
+        <p className="settings-hint">已封存旅行僅供查看，無法修改匯率。</p>
+      ) : (
+        <>
+          <Button
+            type="button"
+            fullWidth
+            onClick={handleSaveRates}
+            disabled={savingRates || refreshingRates}
+          >
+            {savingRates ? '儲存中...' : '儲存匯率'}
+          </Button>
+          <Button
+            type="button"
+            fullWidth
+            variant="outline"
+            onClick={handleRefreshRates}
+            disabled={savingRates || refreshingRates}
+          >
+            {refreshingRates ? '抓取中...' : '重新抓取目前匯率'}
+          </Button>
+        </>
+      )}
     </Card>
   )
 }

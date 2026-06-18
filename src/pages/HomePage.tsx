@@ -6,14 +6,38 @@ import { Input } from '../components/ui/Input'
 import { getRecentTrips, setSession } from '../utils/storage'
 import type { RecentTrip } from '../types'
 
+function TripCard({ trip, onEnter }: { trip: RecentTrip; onEnter: () => void }) {
+  const isArchived = trip.status === 'archived'
+
+  return (
+    <article key={trip.tripCode} className={`home-trip-card card${isArchived ? ' home-trip-card--archived' : ''}`}>
+      <div className="home-trip-info">
+        <div className="home-trip-name-row">
+          <h3 className="home-trip-name">{trip.tripName}</h3>
+          {isArchived && <span className="home-trip-badge">已封存</span>}
+        </div>
+        <p className="home-trip-meta">📍 {trip.destination}</p>
+        <p className="home-trip-code">代碼 {trip.tripCode}</p>
+      </div>
+      <Button fullWidth onClick={onEnter}>
+        進入旅程
+      </Button>
+    </article>
+  )
+}
+
 export function HomePage() {
   const navigate = useNavigate()
   const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([])
   const [joinCode, setJoinCode] = useState('')
+  const [showArchived, setShowArchived] = useState(false)
 
   useEffect(() => {
     setRecentTrips(getRecentTrips())
   }, [])
+
+  const activeTrips = recentTrips.filter((t) => t.status !== 'archived')
+  const archivedTrips = recentTrips.filter((t) => t.status === 'archived')
 
   const handleEnterTrip = (trip: RecentTrip) => {
     setSession({ tripCode: trip.tripCode, memberId: trip.memberId })
@@ -38,28 +62,42 @@ export function HomePage() {
         </div>
 
         <section className="home-section">
-          <h2 className="home-section-title">我的旅程</h2>
-          {recentTrips.length > 0 ? (
+          <h2 className="home-section-title">進行中的旅行</h2>
+          {activeTrips.length > 0 ? (
             <div className="home-trip-list">
-              {recentTrips.map((trip) => (
-                <article key={trip.tripCode} className="home-trip-card card">
-                  <div className="home-trip-info">
-                    <h3 className="home-trip-name">{trip.tripName}</h3>
-                    <p className="home-trip-meta">📍 {trip.destination}</p>
-                    <p className="home-trip-code">代碼 {trip.tripCode}</p>
-                  </div>
-                  <Button fullWidth onClick={() => handleEnterTrip(trip)}>
-                    進入旅程
-                  </Button>
-                </article>
+              {activeTrips.map((trip) => (
+                <TripCard key={trip.tripCode} trip={trip} onEnter={() => handleEnterTrip(trip)} />
               ))}
             </div>
           ) : (
             <p className="home-empty-hint">
-              如果朋友已經建立旅程，請從群組公告點連結，或輸入旅程代碼加入。
+              {recentTrips.length > 0
+                ? '目前沒有進行中的旅行。已封存的旅行可在下方查看。'
+                : '如果朋友已經建立旅程，請從群組公告點連結，或輸入旅程代碼加入。'}
             </p>
           )}
         </section>
+
+        {archivedTrips.length > 0 && (
+          <section className="home-section home-section--archived">
+            <button
+              type="button"
+              className="home-section-toggle"
+              onClick={() => setShowArchived((open) => !open)}
+              aria-expanded={showArchived}
+            >
+              <h2 className="home-section-title">已封存旅行（{archivedTrips.length}）</h2>
+              <span className="home-section-toggle-icon">{showArchived ? '▾' : '▸'}</span>
+            </button>
+            {showArchived && (
+              <div className="home-trip-list">
+                {archivedTrips.map((trip) => (
+                  <TripCard key={trip.tripCode} trip={trip} onEnter={() => handleEnterTrip(trip)} />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
 
         <section className="home-section">
           <h2 className="home-section-title">輸入旅程代碼</h2>

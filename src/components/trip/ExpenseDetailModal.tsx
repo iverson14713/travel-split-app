@@ -13,6 +13,7 @@ interface ExpenseDetailModalProps {
   trip: Trip
   onEdit: (expense: Expense) => void
   onDeleted: () => Promise<void>
+  readOnly?: boolean
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -31,6 +32,7 @@ export function ExpenseDetailModal({
   trip,
   onEdit,
   onDeleted,
+  readOnly = false,
 }: ExpenseDetailModalProps) {
   if (!expense) return null
 
@@ -95,14 +97,16 @@ export function ExpenseDetailModal({
 
         <DetailRow label="建立時間" value={formatDateTime(expense.createdAt)} />
 
-        <div className="expense-detail-actions">
-          <Button variant="outline" fullWidth onClick={() => onEdit(expense)}>
-            編輯
-          </Button>
-          <Button variant="outline" fullWidth onClick={handleDelete}>
-            刪除
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="expense-detail-actions">
+            <Button variant="outline" fullWidth onClick={() => onEdit(expense)}>
+              編輯
+            </Button>
+            <Button variant="outline" fullWidth onClick={handleDelete}>
+              刪除
+            </Button>
+          </div>
+        )}
       </div>
     </Modal>
   )

@@ -7,13 +7,15 @@ import {
 } from '../../utils/settlement'
 import { Button } from '../ui/Button'
 import type { UpgradeReason } from '../../services/tripUnlockService'
+import type { ReloadOptions } from '../../hooks/useTrip'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
+import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 
 interface SettlementTabProps {
   trip: Trip
   tripId: string
   currentMemberId?: string
-  onReload: () => Promise<void>
+  onReload: (options?: ReloadOptions) => Promise<void>
   onUpgradeRequired?: (reason: UpgradeReason) => void
 }
 
@@ -34,9 +36,16 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
 
   const hasAnyExpense = trip.expenses.length > 0
   const hasAnySettlement = settlementItems.length > 0
+  const isArchived = trip.status === 'archived'
 
   return (
     <div className="tab-panel">
+      {isArchived && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
+        </div>
+      )}
       {!hasAnyExpense ? (
         <div className="empty-state">
           <p className="empty-icon">🧾</p>
@@ -71,7 +80,7 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
                     })
                     setShowRepayModal(true)
                   }}
-                  disabled={!item.fromId || !item.toId}
+                  disabled={isArchived || !item.fromId || !item.toId}
                 >
                   記錄已還款
                 </Button>

@@ -5,13 +5,15 @@ import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { ExpenseDetailModal } from './ExpenseDetailModal'
 import { ExpenseUpsertModal } from './ExpenseUpsertModal'
+import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
+import type { ReloadOptions } from '../../hooks/useTrip'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 
 interface ExpensesTabProps {
   trip: Trip
   tripId: string
   currentMemberId?: string
-  onReload: () => Promise<void>
+  onReload: (options?: ReloadOptions) => Promise<void>
   onUpgradeRequired?: (reason: UpgradeReason) => void
 }
 
@@ -82,19 +84,23 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgrade
     setEditingExpense(expense)
   }
 
+  const isArchived = trip.status === 'archived'
+
   return (
     <div className="tab-panel">
-      {trip.status === 'archived' && (
+      {isArchived && (
         <div className="archived-hint">
           <span>📌</span>
-          <p>這趟旅行已封存，新增內容會自動恢復為進行中</p>
+          <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
         </div>
       )}
       <div className="tab-panel-header">
         <h3 className="tab-panel-title">支出紀錄</h3>
-        <Button size="sm" onClick={() => setShowAddModal(true)}>
-          + 新增支出
-        </Button>
+        {!isArchived && (
+          <Button size="sm" onClick={() => setShowAddModal(true)}>
+            + 新增支出
+          </Button>
+        )}
       </div>
 
       {sortedExpenses.length === 0 ? (
@@ -122,6 +128,7 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgrade
         trip={trip}
         onEdit={handleEdit}
         onDeleted={onReload}
+        readOnly={isArchived}
       />
 
       <ExpenseUpsertModal
