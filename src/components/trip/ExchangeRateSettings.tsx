@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Trip } from '../../types'
 import {
-  COMMON_RATE_CURRENCY_CODES,
   formatDisplayRateValue,
   getRateUnitLabel,
-  MORE_RATE_CURRENCY_CODES,
+  OTHER_RATE_CURRENCY_CODES,
   parseDisplayRateToTwd,
+  PRIMARY_RATE_CURRENCY_CODES,
 } from '../../constants/currencies'
 import { fetchLatestExchangeRatesToTwd, FALLBACK_RATE_NOTICE } from '../../services/exchangeRateService'
 import { updateExchangeRates } from '../../services/tripService'
@@ -21,7 +21,7 @@ interface ExchangeRateSettingsProps {
 
 function buildDisplayValues(rates: Record<string, number>): Record<string, string> {
   const values: Record<string, string> = {}
-  for (const code of [...COMMON_RATE_CURRENCY_CODES, ...MORE_RATE_CURRENCY_CODES]) {
+  for (const code of [...PRIMARY_RATE_CURRENCY_CODES, ...OTHER_RATE_CURRENCY_CODES]) {
     values[code] = formatDisplayRateValue(code, rates[code] ?? 0)
   }
   return values
@@ -49,14 +49,14 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
   const [displayValues, setDisplayValues] = useState<Record<string, string>>(() =>
     buildDisplayValues(trip.exchangeRatesToTwd),
   )
-  const [showMore, setShowMore] = useState(false)
+  const [showOther, setShowOther] = useState(false)
   const [savingRates, setSavingRates] = useState(false)
   const [refreshingRates, setRefreshingRates] = useState(false)
   const [rateError, setRateError] = useState('')
   const [rateNotice, setRateNotice] = useState('')
 
   const allCodes = useMemo(
-    () => [...COMMON_RATE_CURRENCY_CODES, ...MORE_RATE_CURRENCY_CODES],
+    () => [...PRIMARY_RATE_CURRENCY_CODES, ...OTHER_RATE_CURRENCY_CODES],
     [],
   )
 
@@ -128,7 +128,7 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
         <span className="settings-value">TWD 台幣</span>
       </div>
 
-      {COMMON_RATE_CURRENCY_CODES.map((code) => (
+      {PRIMARY_RATE_CURRENCY_CODES.map((code) => (
         <RateInputRow
           key={code}
           code={code}
@@ -137,19 +137,32 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
         />
       ))}
 
-      <button type="button" className="exchange-rate-toggle" onClick={() => setShowMore((v) => !v)}>
-        {showMore ? '收合更多幣別 ▴' : '更多幣別 ▾'}
-      </button>
+      <div className="exchange-rate-collapse">
+        <button
+          type="button"
+          className="exchange-rate-toggle"
+          aria-expanded={showOther}
+          onClick={() => setShowOther((v) => !v)}
+        >
+          <span>其他幣別</span>
+          <span className="exchange-rate-toggle-arrow" aria-hidden="true">
+            {showOther ? '▲' : '▼'}
+          </span>
+        </button>
 
-      {showMore &&
-        MORE_RATE_CURRENCY_CODES.map((code) => (
-          <RateInputRow
-            key={code}
-            code={code}
-            value={displayValues[code] ?? ''}
-            onChange={(value) => setDisplayValues((prev) => ({ ...prev, [code]: value }))}
-          />
-        ))}
+        {showOther && (
+          <div className="exchange-rate-collapse-body">
+            {OTHER_RATE_CURRENCY_CODES.map((code) => (
+              <RateInputRow
+                key={code}
+                code={code}
+                value={displayValues[code] ?? ''}
+                onChange={(value) => setDisplayValues((prev) => ({ ...prev, [code]: value }))}
+              />
+            ))}
+          </div>
+        )}
+      </div>
 
       {rateError && <p className="form-error-msg">{rateError}</p>}
       {rateNotice && <p className="settings-hint">{rateNotice}</p>}

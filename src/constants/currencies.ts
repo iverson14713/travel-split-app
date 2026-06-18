@@ -25,9 +25,29 @@ export const TRAVEL_CURRENCIES: CurrencyDefinition[] = [
   { code: 'IDR', label: 'IDR 印尼盾', shortLabel: '印尼盾', decimalDigits: 0, displayRateUnit: 1 },
 ]
 
-export const COMMON_RATE_CURRENCY_CODES = ['JPY', 'USD', 'EUR', 'KRW', 'CNY', 'HKD', 'SGD', 'THB'] as const
+export const PRIMARY_RATE_CURRENCY_CODES = ['JPY', 'USD'] as const
 
-export const MORE_RATE_CURRENCY_CODES = ['AUD', 'VND', 'GBP', 'CAD', 'MYR', 'PHP', 'IDR'] as const
+export const OTHER_RATE_CURRENCY_CODES = [
+  'EUR',
+  'KRW',
+  'CNY',
+  'HKD',
+  'SGD',
+  'THB',
+  'VND',
+  'AUD',
+  'GBP',
+  'CAD',
+  'MYR',
+  'PHP',
+  'IDR',
+] as const
+
+/** @deprecated Use PRIMARY_RATE_CURRENCY_CODES */
+export const COMMON_RATE_CURRENCY_CODES = PRIMARY_RATE_CURRENCY_CODES
+
+/** @deprecated Use OTHER_RATE_CURRENCY_CODES */
+export const MORE_RATE_CURRENCY_CODES = OTHER_RATE_CURRENCY_CODES
 
 const currencyMap = new Map(TRAVEL_CURRENCIES.map((c) => [c.code, c]))
 

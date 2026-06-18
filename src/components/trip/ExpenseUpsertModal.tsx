@@ -21,6 +21,11 @@ const CATEGORIES = [
   { value: '其他', label: '其他' },
 ]
 
+const EXPENSE_TYPE_OPTIONS: { value: ExpenseType; label: string; hint: string }[] = [
+  { value: 'expense', label: '消費支出', hint: '一般吃飯、交通、購物，會列入分帳' },
+  { value: 'transfer', label: '共同預付', hint: '先放一筆共用金，之後可以從共同金扣款' },
+]
+
 export interface ExpenseUpsertModalPreset {
   type?: ExpenseType
   amount?: number
@@ -81,6 +86,8 @@ export function ExpenseUpsertModal({
     const parsedAmount = parseFloat(amount)
     return buildTwdEstimateHint(currency, parsedAmount, exchangeRateToTwd)
   }, [amount, currency, exchangeRateToTwd])
+
+  const typeHint = EXPENSE_TYPE_OPTIONS.find((opt) => opt.value === type)?.hint ?? ''
 
   useEffect(() => {
     if (!open) return
@@ -143,15 +150,25 @@ export function ExpenseUpsertModal({
   return (
     <Modal open={open} onClose={onClose} title={title}>
       <div className="form">
-        <Select
-          label="支出類型"
-          value={type}
-          onChange={(e) => setType(e.target.value as ExpenseType)}
-          options={[
-            { value: 'expense', label: '消費支出' },
-            { value: 'transfer', label: '還款/轉帳' },
-          ]}
-        />
+        <div className="form-field">
+          <span className="form-label">支出類型</span>
+          <div className="segmented-control" role="group" aria-label="支出類型">
+            {EXPENSE_TYPE_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                className={`segmented-control__option${
+                  type === opt.value ? ' segmented-control__option--active' : ''
+                }`}
+                aria-pressed={type === opt.value}
+                onClick={() => setType(opt.value)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <p className="segmented-control-hint">{typeHint}</p>
+        </div>
 
         <Input
           label="金額"
