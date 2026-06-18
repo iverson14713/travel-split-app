@@ -22,6 +22,9 @@ function getDefaultExpandedDay(days: ReturnType<typeof getTripDays>, itinerary: 
   return firstWithItems?.day ?? 1
 }
 
+/** IntersectionObserver rootMargin must use px or % only (no rem/vh/calc). */
+const DAY_OBSERVER_ROOT_MARGIN = '-112px 0px -60% 0px'
+
 export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
   const [showModal, setShowModal] = useState(false)
@@ -60,30 +63,37 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   }, [])
 
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const visible = entries
-          .filter((entry) => entry.isIntersecting)
-          .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
+    let observer: IntersectionObserver | null = null
 
-        if (visible.length === 0) return
+    try {
+      observer = new IntersectionObserver(
+        (entries) => {
+          const visible = entries
+            .filter((entry) => entry.isIntersecting)
+            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
 
-        const day = Number(visible[0].target.getAttribute('data-day'))
-        if (!Number.isNaN(day)) {
-          setActiveDay(day)
-          chipRefs.current.get(day)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-        }
-      },
-      { rootMargin: '-7rem 0px -55% 0px', threshold: 0 },
-    )
+          if (visible.length === 0) return
 
-    for (const day of days) {
-      const el = dayRefs.current.get(day.day)
-      if (el) observer.observe(el)
+          const day = Number(visible[0].target.getAttribute('data-day'))
+          if (!Number.isNaN(day)) {
+            setActiveDay(day)
+            chipRefs.current.get(day)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+          }
+        },
+        { rootMargin: DAY_OBSERVER_ROOT_MARGIN, threshold: 0 },
+      )
+
+      for (const day of days) {
+        const el = dayRefs.current.get(day.day)
+        if (el) observer.observe(el)
+      }
+    } catch {
+      setActiveDay(getDefaultExpandedDay(days, trip.itinerary))
+      return
     }
 
-    return () => observer.disconnect()
-  }, [days, expandedDays])
+    return () => observer?.disconnect()
+  }, [days, expandedDays, trip.itinerary])
 
   useEffect(() => {
     if (scrollAfterAddRef.current === null) return
