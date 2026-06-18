@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Expense, ExpenseType, Trip } from '../../types'
 import { TRAVEL_CURRENCIES } from '../../constants/currencies'
+import { DEFAULT_EXPENSE_CATEGORY, EXPENSE_CATEGORIES } from '../../constants/expenseCategories'
 import { addExpense, updateExpense } from '../../services/tripService'
 import { buildTwdEstimateHint } from '../../services/exchangeRateService'
 import { getExchangeRateForCurrency } from '../../utils/settlement'
@@ -11,15 +12,6 @@ import { Textarea } from '../ui/Textarea'
 import { Button } from '../ui/Button'
 
 const CURRENCY_OPTIONS = TRAVEL_CURRENCIES.map((c) => ({ value: c.code, label: c.label }))
-
-const CATEGORIES = [
-  { value: '交通', label: '交通' },
-  { value: '住宿', label: '住宿' },
-  { value: '餐飲', label: '餐飲' },
-  { value: '門票', label: '門票' },
-  { value: '購物', label: '購物' },
-  { value: '其他', label: '其他' },
-]
 
 const EXPENSE_TYPE_OPTIONS: { value: ExpenseType; label: string; hint: string }[] = [
   { value: 'expense', label: '消費支出', hint: '一般吃飯、交通、購物，會列入分帳' },
@@ -74,7 +66,7 @@ export function ExpenseUpsertModal({
   const [payerId, setPayerId] = useState(defaultPayer)
   const [receiverId, setReceiverId] = useState('')
   const [participantIds, setParticipantIds] = useState<string[]>(trip.members.map((m) => m.id))
-  const [category, setCategory] = useState('餐飲')
+  const [category, setCategory] = useState(DEFAULT_EXPENSE_CATEGORY)
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
@@ -110,7 +102,7 @@ export function ExpenseUpsertModal({
       setPayerId(preset?.payerMemberId ?? defaultPayer)
       setReceiverId(preset?.receiverMemberId ?? '')
       setParticipantIds(trip.members.map((m) => m.id))
-      setCategory('餐飲')
+      setCategory(DEFAULT_EXPENSE_CATEGORY)
       setNote('')
     }
 
@@ -248,7 +240,7 @@ export function ExpenseUpsertModal({
               label="分類"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
-              options={CATEGORIES}
+              options={[...EXPENSE_CATEGORIES]}
             />
           </>
         ) : (
