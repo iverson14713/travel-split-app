@@ -368,6 +368,53 @@ export async function addExpense(input: {
   await touchTripActivity(input.tripId)
 }
 
+export async function updateExpense(
+  expenseId: string,
+  input: {
+    tripId: string
+    type: ExpenseType
+    payerMemberId: string
+    receiverMemberId?: string
+    amount: number
+    currency: string
+    exchangeRateToTwd: number
+    category: string
+    note: string
+    participantMemberIds: string[]
+  },
+): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db
+    .from(DB_TABLES.expenses)
+    .update({
+      type: input.type,
+      payer_member_id: input.payerMemberId,
+      receiver_member_id: input.receiverMemberId ?? null,
+      amount: input.amount,
+      currency: input.currency,
+      exchange_rate_to_twd: input.exchangeRateToTwd,
+      category: input.category,
+      note: input.note || null,
+      participant_member_ids: input.participantMemberIds,
+    })
+    .eq('id', expenseId)
+
+  if (error) throw error
+  await reviveTripIfArchived(input.tripId)
+  await touchTripActivity(input.tripId)
+}
+
+export async function deleteExpense(expenseId: string, tripId: string): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db.from(DB_TABLES.expenses).delete().eq('id', expenseId)
+
+  if (error) throw error
+  await reviveTripIfArchived(tripId)
+  await touchTripActivity(tripId)
+}
+
 export async function updateMemberName(memberId: string, name: string): Promise<void> {
   const db = requireSupabase()
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { ExpenseType, Trip } from '../../types'
+import type { Expense, ExpenseType, Trip } from '../../types'
 import { TRAVEL_CURRENCIES } from '../../constants/currencies'
-import { addExpense } from '../../services/tripService'
+import { addExpense, updateExpense } from '../../services/tripService'
 import { buildTwdEstimateHint } from '../../services/exchangeRateService'
 import { getExchangeRateForCurrency } from '../../utils/settlement'
 import { Modal } from '../ui/Modal'
@@ -42,6 +42,7 @@ interface ExpenseUpsertModalProps {
   tripId: string
   currentMemberId?: string
   preset?: ExpenseUpsertModalPreset
+  expense?: Expense
   onSaved: () => Promise<void>
 }
 
@@ -53,6 +54,7 @@ export function ExpenseUpsertModal({
   tripId,
   currentMemberId,
   preset,
+  expense,
   onSaved,
 }: ExpenseUpsertModalProps) {
   const defaultPayer = currentMemberId ?? trip.members[0]?.id ?? ''
@@ -92,17 +94,29 @@ export function ExpenseUpsertModal({
   useEffect(() => {
     if (!open) return
 
-    setType(preset?.type ?? 'expense')
-    setAmount(preset?.amount != null ? String(preset.amount) : '')
-    setCurrency((preset?.currency ?? 'TWD').toUpperCase())
-    setPayerId(preset?.payerMemberId ?? defaultPayer)
-    setReceiverId(preset?.receiverMemberId ?? '')
-    setParticipantIds(trip.members.map((m) => m.id))
-    setCategory('餐飲')
-    setNote('')
+    if (expense) {
+      setType(expense.type)
+      setAmount(String(expense.amount))
+      setCurrency((expense.currency || 'TWD').toUpperCase())
+      setPayerId(expense.payerId)
+      setReceiverId(expense.receiverId ?? '')
+      setParticipantIds(expense.participantIds.length > 0 ? expense.participantIds : trip.members.map((m) => m.id))
+      setCategory(expense.type === 'transfer' ? '還款' : expense.category)
+      setNote(expense.note ?? '')
+    } else {
+      setType(preset?.type ?? 'expense')
+      setAmount(preset?.amount != null ? String(preset.amount) : '')
+      setCurrency((preset?.currency ?? 'TWD').toUpperCase())
+      setPayerId(preset?.payerMemberId ?? defaultPayer)
+      setReceiverId(preset?.receiverMemberId ?? '')
+      setParticipantIds(trip.members.map((m) => m.id))
+      setCategory('餐飲')
+      setNote('')
+    }
+
     setError('')
     setSubmitting(false)
-  }, [open, preset, defaultPayer, trip.members])
+  }, [open, preset, expense, defaultPayer, trip.members])
 
   const toggleParticipant = (id: string) => {
     setParticipantIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
@@ -126,18 +140,29 @@ export function ExpenseUpsertModal({
     setSubmitting(true)
     setError('')
     try {
-      await addExpense({
+      const exchangeRateToTwd =
+        expense && (expense.currency || 'TWD').toUpperCase() === currency
+          ? expense.exchangeRateToTwd
+          : getExchangeRateForCurrency(currency, trip)
+
+      const payload = {
         tripId,
         type,
         payerMemberId: payerId,
         receiverMemberId: type === 'transfer' ? receiverId : undefined,
         amount: parsedAmount,
         currency,
-        exchangeRateToTwd: getExchangeRateForCurrency(currency, trip),
+        exchangeRateToTwd,
         category: type === 'transfer' ? '還款' : category,
         note: note.trim(),
         participantMemberIds: type === 'transfer' ? [] : participantIds,
-      })
+      }
+
+      if (expense) {
+        await updateExpense(expense.id, payload)
+      } else {
+        await addExpense(payload)
+      }
       await onSaved()
       onClose()
     } catch (err) {

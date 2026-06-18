@@ -34,3 +34,14 @@ export function formatDateRange(startDate: string, endDate: string): string {
   }
   return `${fmt(startDate)} – ${fmt(endDate)}`
 }
+
+export function formatDateTime(iso: string): string {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  const y = date.getFullYear()
+  const m = date.getMonth() + 1
+  const d = date.getDate()
+  const hh = String(date.getHours()).padStart(2, '0')
+  const mm = String(date.getMinutes()).padStart(2, '0')
+  return `${y}/${m}/${d} ${hh}:${mm}`
+}
