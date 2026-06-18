@@ -2,23 +2,25 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
-import { getSession } from '../utils/storage'
+import { getSession, recordRecentTrip } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getShareLink } from '../utils/tripCode'
 import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
 import { Toast } from '../components/ui/Toast'
 import { ItineraryTab } from '../components/trip/ItineraryTab'
 import { ExpensesTab } from '../components/trip/ExpensesTab'
+import { OverviewTab } from '../components/trip/OverviewTab'
 import { SettlementTab } from '../components/trip/SettlementTab'
-import { SettingsTab } from '../components/trip/SettingsTab'
+import { SettingsPanel } from '../components/trip/SettingsTab'
 
-type Tab = 'itinerary' | 'expenses' | 'settlement' | 'settings'
+type Tab = 'itinerary' | 'expenses' | 'overview' | 'settlement'
 
 const TABS: { key: Tab; label: string; icon: string }[] = [
   { key: 'itinerary', label: '行程', icon: '🗓️' },
   { key: 'expenses', label: '記帳', icon: '💰' },
+  { key: 'overview', label: '總覽', icon: '📊' },
   { key: 'settlement', label: '結算', icon: '🧾' },
-  { key: 'settings', label: '設定', icon: '⚙️' },
 ]
 
 export function TripRoomPage() {
@@ -29,12 +31,24 @@ export function TripRoomPage() {
   const [activeTab, setActiveTab] = useState<Tab>('itinerary')
   const [copied, setCopied] = useState(false)
   const [showJoinedToast, setShowJoinedToast] = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
 
   const tripCode = code?.toUpperCase() ?? ''
   const session = getSession()
   const sessionMatchesTrip = session?.tripCode === tripCode
   const currentMember = trip?.members.find((m) => m.id === session?.memberId)
   const hasValidSession = sessionMatchesTrip && !!currentMember
+
+  useEffect(() => {
+    if (!trip || !currentMember) return
+    recordRecentTrip({
+      tripCode: trip.code,
+      tripName: trip.name,
+      destination: trip.destination,
+      memberId: currentMember.id,
+      memberName: currentMember.nickname,
+    })
+  }, [trip, currentMember])
 
   useEffect(() => {
     if (loading) return
@@ -113,9 +127,19 @@ export function TripRoomPage() {
             <p className="trip-dates">{formatDateRange(trip.startDate, trip.endDate)}</p>
             <p className="trip-members">👥 {trip.members.length} 位成員</p>
           </div>
-          <Button size="sm" variant="outline" onClick={handleCopyLink}>
-            {copied ? '已複製' : '分享連結'}
-          </Button>
+          <div className="trip-header-actions">
+            <Button size="sm" variant="outline" onClick={handleCopyLink}>
+              {copied ? '已複製' : '分享'}
+            </Button>
+            <button
+              type="button"
+              className="trip-header-icon-btn"
+              onClick={() => setShowSettings(true)}
+              aria-label="設定"
+            >
+              ⚙️
+            </button>
+          </div>
         </header>
 
         <nav className="tab-nav">
@@ -149,6 +173,9 @@ export function TripRoomPage() {
               onReload={reload}
             />
           )}
+          {activeTab === 'overview' && (
+            <OverviewTab trip={trip} currentMemberId={currentMember?.id} />
+          )}
           {activeTab === 'settlement' && (
             <SettlementTab
               trip={trip}
@@ -157,17 +184,18 @@ export function TripRoomPage() {
               onReload={reload}
             />
           )}
-          {activeTab === 'settings' && (
-            <SettingsTab
-              trip={trip}
-              tripId={trip.id}
-              isHost={currentMember?.isHost ?? false}
-              currentMemberId={currentMember?.id}
-              onReload={reload}
-            />
-          )}
         </div>
       </div>
+
+      <Modal open={showSettings} onClose={() => setShowSettings(false)} title="設定">
+        <SettingsPanel
+          trip={trip}
+          tripId={trip.id}
+          isHost={currentMember?.isHost ?? false}
+          currentMemberId={currentMember?.id}
+          onReload={reload}
+        />
+      </Modal>
     </Layout>
   )
 }

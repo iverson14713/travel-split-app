@@ -55,6 +55,15 @@ export interface UserSession {
   memberId: string
 }
 
+export interface RecentTrip {
+  tripCode: string
+  tripName: string
+  destination: string
+  memberId: string
+  memberName: string
+  lastOpenedAt: string
+}
+
 export interface SettlementItem {
   fromId?: string
   from: string

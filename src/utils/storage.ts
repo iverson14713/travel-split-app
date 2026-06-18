@@ -1,6 +1,8 @@
-import type { UserSession } from '../types'
+import type { RecentTrip, UserSession } from '../types'
 
 const SESSION_KEY = 'travel-split-session'
+const RECENT_TRIPS_KEY = 'travel-split-recent-trips'
+const MAX_RECENT_TRIPS = 20
 
 export function getSession(): UserSession | null {
   try {
@@ -22,4 +24,36 @@ export function clearSession(): void {
 export function hasSessionForTrip(tripCode: string): boolean {
   const session = getSession()
   return session?.tripCode === tripCode.toUpperCase()
+}
+
+export function getRecentTrips(): RecentTrip[] {
+  try {
+    const raw = localStorage.getItem(RECENT_TRIPS_KEY)
+    const trips: RecentTrip[] = raw ? JSON.parse(raw) : []
+    return trips.sort(
+      (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+    )
+  } catch {
+    return []
+  }
+}
+
+export function recordRecentTrip(
+  entry: Omit<RecentTrip, 'lastOpenedAt'> & { lastOpenedAt?: string },
+): void {
+  const now = entry.lastOpenedAt ?? new Date().toISOString()
+  const normalized: RecentTrip = {
+    tripCode: entry.tripCode.toUpperCase(),
+    tripName: entry.tripName,
+    destination: entry.destination,
+    memberId: entry.memberId,
+    memberName: entry.memberName,
+    lastOpenedAt: now,
+  }
+
+  const existing = getRecentTrips()
+  const others = existing.filter((t) => t.tripCode !== normalized.tripCode)
+  const updated = [normalized, ...others].slice(0, MAX_RECENT_TRIPS)
+
+  localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
 }

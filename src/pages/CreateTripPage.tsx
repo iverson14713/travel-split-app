@@ -7,7 +7,7 @@ import { Card } from '../components/ui/Card'
 import { createTrip } from '../services/tripService'
 import { getShareLink } from '../utils/tripCode'
 import { getLineShareText } from '../utils/shareText'
-import { setSession } from '../utils/storage'
+import { setSession, recordRecentTrip } from '../utils/storage'
 
 export function CreateTripPage() {
   const navigate = useNavigate()
@@ -52,6 +52,13 @@ export function CreateTripPage() {
       })
 
       setSession({ tripCode: trip.code, memberId })
+      recordRecentTrip({
+        tripCode: trip.code,
+        tripName: trip.name,
+        destination: trip.destination,
+        memberId,
+        memberName: ownerName.trim() || '主揪',
+      })
       setCreatedCode(trip.code)
     } catch (err) {
       setError(err instanceof Error ? err.message : '建立旅行失敗，請稍後再試')

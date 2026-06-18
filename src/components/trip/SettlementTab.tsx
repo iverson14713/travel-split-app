@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import type { Trip } from '../../types'
 import { Card } from '../ui/Card'
-import { computeSettlementsByCurrency } from '../../utils/settlement'
+import { calculateSettlementTransfers, formatAmount } from '../../utils/settlement'
 import { Button } from '../ui/Button'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 
@@ -13,7 +13,7 @@ interface SettlementTabProps {
 }
 
 export function SettlementTab({ trip, tripId, currentMemberId, onReload }: SettlementTabProps) {
-  const byCurrency = computeSettlementsByCurrency({
+  const byCurrency = calculateSettlementTransfers({
     members: trip.members,
     expenses: trip.expenses,
   })
@@ -52,7 +52,7 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload }: Settl
                       </div>
                       <div className="settlement-bottom">
                         <p className="settlement-amount">
-                          {item.currency} {item.amount.toLocaleString()}
+                          {item.currency} {formatAmount(item.amount, item.currency)}
                         </p>
                         <Button
                           size="sm"

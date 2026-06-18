@@ -5,7 +5,7 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { fetchTripByCode, joinTrip } from '../services/tripService'
-import { getSession, hasSessionForTrip, setSession } from '../utils/storage'
+import { getSession, hasSessionForTrip, setSession, recordRecentTrip } from '../utils/storage'
 import type { Member } from '../types'
 
 export function JoinTripPage() {
@@ -19,6 +19,7 @@ export function JoinTripPage() {
   const [checkingTrip, setCheckingTrip] = useState(!!urlCode)
   const [tripFound, setTripFound] = useState<boolean | null>(null)
   const [tripName, setTripName] = useState('')
+  const [tripDestination, setTripDestination] = useState('')
   const [members, setMembers] = useState<Member[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState('')
   const [duplicateMember, setDuplicateMember] = useState<Member | null>(null)
@@ -52,6 +53,7 @@ export function JoinTripPage() {
         if (!trip) {
           setTripFound(false)
           setTripName('')
+          setTripDestination('')
           setMembers([])
           setSelectedMemberId('')
           return
@@ -59,6 +61,7 @@ export function JoinTripPage() {
 
         setTripFound(true)
         setTripName(trip.name)
+        setTripDestination(trip.destination)
         setMembers(trip.members)
         setSelectedMemberId(trip.members[0]?.id ?? '')
       })
@@ -66,6 +69,7 @@ export function JoinTripPage() {
         if (cancelled) return
         setTripFound(false)
         setTripName('')
+        setTripDestination('')
         setMembers([])
         setSelectedMemberId('')
       })
@@ -77,6 +81,19 @@ export function JoinTripPage() {
       cancelled = true
     }
   }, [code])
+
+  const saveAndEnterTrip = (memberId: string, memberName: string, joined = false) => {
+    const trimmedCode = code.trim().toUpperCase()
+    setSession({ tripCode: trimmedCode, memberId })
+    recordRecentTrip({
+      tripCode: trimmedCode,
+      tripName,
+      destination: tripDestination,
+      memberId,
+      memberName,
+    })
+    navigate(`/trip/${trimmedCode}`, joined ? { state: { joined: true } } : undefined)
+  }
 
   const handleJoin = async () => {
     setError('')
@@ -115,8 +132,7 @@ export function JoinTripPage() {
       }
 
       const member = await joinTrip(trip.id, trimmedNickname)
-      setSession({ tripCode: trimmedCode, memberId: member.id })
-      navigate(`/trip/${trimmedCode}`, { state: { joined: true } })
+      saveAndEnterTrip(member.id, member.nickname, true)
     } catch (err) {
       setError(err instanceof Error ? err.message : '加入旅行失敗，請稍後再試')
     } finally {
@@ -136,6 +152,9 @@ export function JoinTripPage() {
             : urlCode
               ? '輸入你的暱稱即可加入這趟旅行'
               : '輸入朋友分享的旅行代碼和你的暱稱'}
+        </p>
+        <p className="page-tip">
+          第一次使用請輸入暱稱加入。之後從同一個 LINE 公告或同一個瀏覽器打開，會直接進入旅程。
         </p>
 
         {checkingTrip && <p className="loading-text">查詢旅行中...</p>}
@@ -176,10 +195,7 @@ export function JoinTripPage() {
                   <div className="page-actions" style={{ marginTop: '0.25rem' }}>
                     <Button
                       fullWidth
-                      onClick={() => {
-                        setSession({ tripCode: code.trim().toUpperCase(), memberId: duplicateMember.id })
-                        navigate(`/trip/${code.trim().toUpperCase()}`)
-                      }}
+                      onClick={() => saveAndEnterTrip(duplicateMember.id, duplicateMember.nickname)}
                     >
                       我是 {duplicateMember.nickname}，直接進入
                     </Button>
@@ -218,8 +234,9 @@ export function JoinTripPage() {
                   fullWidth
                   onClick={() => {
                     if (!selectedMemberId) return
-                    setSession({ tripCode: code.trim().toUpperCase(), memberId: selectedMemberId })
-                    navigate(`/trip/${code.trim().toUpperCase()}`)
+                    const member = members.find((m) => m.id === selectedMemberId)
+                    if (!member) return
+                    saveAndEnterTrip(member.id, member.nickname)
                   }}
                   disabled={!selectedMemberId}
                 >

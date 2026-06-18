@@ -8,7 +8,7 @@ import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
 import { Modal } from '../ui/Modal'
 
-interface SettingsTabProps {
+interface SettingsPanelProps {
   trip: Trip
   tripId: string
   isHost: boolean
@@ -16,7 +16,7 @@ interface SettingsTabProps {
   onReload: () => Promise<void>
 }
 
-export function SettingsTab({ trip, tripId, isHost, currentMemberId, onReload }: SettingsTabProps) {
+export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload }: SettingsPanelProps) {
   const [copied, setCopied] = useState(false)
   const [lineCopied, setLineCopied] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -113,7 +113,7 @@ export function SettingsTab({ trip, tripId, isHost, currentMemberId, onReload }:
   }
 
   return (
-    <div className="tab-panel">
+    <div className="settings-panel">
       <section className="settings-section">
         <h3 className="settings-title">我的暱稱</h3>
         <Card className="settings-card">
