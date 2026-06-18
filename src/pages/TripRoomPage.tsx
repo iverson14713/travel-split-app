@@ -118,34 +118,36 @@ export function TripRoomPage() {
       />
       <div className="trip-room">
         <header className="trip-header">
-          <div className="trip-header-info">
+          <div className="trip-header-top">
             <div className="trip-title-row">
               <h1 className="trip-name">{trip.name}</h1>
               {trip.status === 'archived' && <span className="trip-badge">已封存</span>}
             </div>
-            <p className="trip-destination">📍 {trip.destination}</p>
-            <p className="trip-dates">{formatDateRange(trip.startDate, trip.endDate)}</p>
-            <p className="trip-members">👥 {trip.members.length} 位成員</p>
+            <div className="trip-header-actions">
+              <Button size="sm" variant="outline" type="button" onClick={handleCopyLink}>
+                {copied ? '已複製' : '分享'}
+              </Button>
+              <button
+                type="button"
+                className="trip-header-icon-btn"
+                onClick={() => setShowSettings(true)}
+                aria-label="設定"
+              >
+                ⚙️
+              </button>
+            </div>
           </div>
-          <div className="trip-header-actions">
-            <Button size="sm" variant="outline" onClick={handleCopyLink}>
-              {copied ? '已複製' : '分享'}
-            </Button>
-            <button
-              type="button"
-              className="trip-header-icon-btn"
-              onClick={() => setShowSettings(true)}
-              aria-label="設定"
-            >
-              ⚙️
-            </button>
-          </div>
+          <p className="trip-destination">📍 {trip.destination}</p>
+          <p className="trip-meta">
+            {formatDateRange(trip.startDate, trip.endDate)}・👥 {trip.members.length} 位成員
+          </p>
         </header>
 
         <nav className="tab-nav">
           {TABS.map((tab) => (
             <button
               key={tab.key}
+              type="button"
               className={`tab-nav-item ${activeTab === tab.key ? 'tab-nav-item--active' : ''}`}
               onClick={() => setActiveTab(tab.key)}
             >
