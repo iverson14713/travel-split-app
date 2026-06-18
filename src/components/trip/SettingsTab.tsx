@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { EditPermission, Trip } from '../../types'
 import { archiveTrip, restoreTrip, softDeleteTrip, updateEditPermission, updateExchangeRates, updateMemberName } from '../../services/tripService'
-import { fetchLatestExchangeRatesToTwd } from '../../services/exchangeRateService'
+import { fetchLatestExchangeRatesToTwd, FALLBACK_RATE_NOTICE } from '../../services/exchangeRateService'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { Button } from '../ui/Button'
@@ -135,7 +135,7 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
         exchangeRateFetchedAt: rates.fetchedAt,
       })
       if (rates.source === 'fallback') {
-        setRateNotice('無法取得目前匯率，已改用預設估算匯率。已建立的舊支出不會自動改變。')
+        setRateNotice(`${FALLBACK_RATE_NOTICE}。已建立的舊支出不會自動改變。`)
       } else {
         setRateNotice('已更新估算匯率。已建立的舊支出不會自動改變。')
       }

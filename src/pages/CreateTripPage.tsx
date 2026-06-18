@@ -9,6 +9,7 @@ import {
   fetchLatestExchangeRatesToTwd,
   formatJpyPer100Twd,
   formatUsdToTwd,
+  FALLBACK_RATE_NOTICE,
   type ExchangeRatesToTwd,
 } from '../services/exchangeRateService'
 import { getShareLink } from '../utils/tripCode'
@@ -121,6 +122,12 @@ export function CreateTripPage() {
               100 JPY ≈ TWD {formatJpyPer100Twd(createdRates.jpyToTwdRate)}
               <br />
               1 USD ≈ TWD {formatUsdToTwd(createdRates.usdToTwdRate)}
+              {createdRates.source === 'fallback' && (
+                <>
+                  <br />
+                  {FALLBACK_RATE_NOTICE}
+                </>
+              )}
             </p>
           )}
 
