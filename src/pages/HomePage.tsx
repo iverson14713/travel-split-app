@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
+import { useAppUI } from '../context/AppUIContext'
 import { getRecentTrips, setSession } from '../utils/storage'
 import type { RecentTrip } from '../types'
 
@@ -28,6 +29,7 @@ function TripCard({ trip, onEnter }: { trip: RecentTrip; onEnter: () => void }) 
 
 export function HomePage() {
   const navigate = useNavigate()
+  const { requestOnboarding } = useAppUI()
   const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([])
   const [joinCode, setJoinCode] = useState('')
   const [showArchived, setShowArchived] = useState(false)
@@ -124,6 +126,24 @@ export function HomePage() {
         </section>
 
         <p className="home-hint">不用下載 App、不用註冊，打開連結就能一起用</p>
+
+        <footer className="home-about">
+          <a href="/privacy" className="home-about-link">
+            隱私權政策
+          </a>
+          <span className="home-about-sep" aria-hidden="true">
+            ·
+          </span>
+          <a href="/terms" className="home-about-link">
+            服務條款
+          </a>
+          <span className="home-about-sep" aria-hidden="true">
+            ·
+          </span>
+          <button type="button" className="home-about-link home-about-button" onClick={requestOnboarding}>
+            重新查看導覽
+          </button>
+        </footer>
       </div>
     </Layout>
   )

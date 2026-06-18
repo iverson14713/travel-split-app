@@ -1,0 +1,5 @@
+export const APP_NAME = '旅伴小本本'
+export const APP_NAME_EN = 'Travel Split'
+export const APP_TAGLINE = '一起排行程，輕鬆分帳'
+export const CONTACT_EMAIL = 'iverson14713@gmail.com'
+export const LEGAL_LAST_UPDATED = '2026 年 6 月'

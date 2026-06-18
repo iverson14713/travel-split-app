@@ -2,6 +2,15 @@ import type { RecentTrip, TripStatus, UserSession } from '../types'
 
 const SESSION_KEY = 'travel-split-session'
 const RECENT_TRIPS_KEY = 'travel-split-recent-trips'
+const ONBOARDING_KEY = 'onboarding_seen'
+
+export function hasSeenOnboarding(): boolean {
+  return localStorage.getItem(ONBOARDING_KEY) === 'true'
+}
+
+export function setOnboardingSeen(): void {
+  localStorage.setItem(ONBOARDING_KEY, 'true')
+}
 const MAX_RECENT_TRIPS = 20
 
 export function getSession(): UserSession | null {

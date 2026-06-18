@@ -19,9 +19,11 @@ import { FreeUsageHint } from './FreeUsageHint'
 import { MemberLimitBanner } from './MemberLimitBanner'
 import { ActiveMemberList } from './ActiveMemberList'
 import { RemoveMemberConfirmModal } from './RemoveMemberConfirmModal'
+import { RestorePurchasesButton } from './RestorePurchasesButton'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { updateRecentTripStatus } from '../../utils/storage'
+import { useAppUI } from '../../context/AppUIContext'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
@@ -55,8 +57,9 @@ export function SettingsPanel({
   const [nameError, setNameError] = useState('')
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const { requestOnboarding } = useAppUI()
   const shareLink = getShareLink(trip.code)
-  const { usage } = useTripUnlock(trip)
+  const { usage, refresh: refreshUnlock } = useTripUnlock(trip)
   const activeMembers = useMemo(() => getActiveMembers(trip.members), [trip.members])
   const {
     memberToRemove,
@@ -190,6 +193,11 @@ export function SettingsPanel({
               解鎖這趟旅程
             </Button>
           )}
+          <RestorePurchasesButton
+            className="restore-purchases restore-purchases--settings"
+            onMessage={onStatusMessage}
+            onRestored={() => refreshUnlock()}
+          />
         </section>
       )}
 
@@ -324,6 +332,21 @@ export function SettingsPanel({
               </Button>
             </div>
           )}
+        </Card>
+      </section>
+
+      <section className="settings-section">
+        <h3 className="settings-title">關於</h3>
+        <Card className="settings-about-card">
+          <a href="/privacy" className="settings-about-link">
+            隱私權政策
+          </a>
+          <a href="/terms" className="settings-about-link">
+            服務條款
+          </a>
+          <button type="button" className="settings-about-link" onClick={requestOnboarding}>
+            重新查看導覽
+          </button>
         </Card>
       </section>
 

@@ -12,6 +12,7 @@ import type { Trip } from '../../types'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
 import { FreeUsageHint } from './FreeUsageHint'
+import { RestorePurchasesButton } from './RestorePurchasesButton'
 
 interface UpgradeModalProps {
   open: boolean
@@ -94,6 +95,11 @@ export function UpgradeModal({
         )}
 
         <p className="upgrade-footnote">只解鎖目前這趟旅程，不是訂閱。</p>
+
+        <RestorePurchasesButton
+          className="restore-purchases restore-purchases--modal"
+          onRestored={() => onUnlocked?.()}
+        />
       </div>
     </Modal>
   )
