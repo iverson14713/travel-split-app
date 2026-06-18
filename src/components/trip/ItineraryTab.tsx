@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Trip } from '../../types'
 import { getTripDays } from '../../utils/dates'
 import { addItineraryItem } from '../../services/tripService'
+import { useItineraryRealtime } from '../../hooks/useItineraryRealtime'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
@@ -17,16 +18,10 @@ interface ItineraryTabProps {
   onReload: () => Promise<void>
 }
 
-function getDefaultExpandedDay(days: ReturnType<typeof getTripDays>, itinerary: Trip['itinerary']): number {
+function getDefaultActiveDay(days: ReturnType<typeof getTripDays>, itinerary: Trip['itinerary']): number {
   const firstWithItems = days.find((day) => itinerary.some((item) => item.day === day.day))
-  return firstWithItems?.day ?? 1
+  return firstWithItems?.day ?? days[0]?.day ?? 1
 }
-
-/** px tolerance below day strip when deciding which day section is active */
-const SCROLL_ANCHOR_BUFFER = 16
-
-/** Fallback duration if scrollend does not fire after programmatic scroll */
-const PROGRAMMATIC_SCROLL_MS = 900
 
 export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
@@ -38,62 +33,11 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
-  const [activeDay, setActiveDay] = useState(() => getDefaultExpandedDay(days, trip.itinerary))
-  const [expandedDays, setExpandedDays] = useState<Set<number>>(
-    () => new Set([getDefaultExpandedDay(days, trip.itinerary)]),
-  )
+  const [activeDay, setActiveDay] = useState(() => getDefaultActiveDay(days, trip.itinerary))
 
-  const dayRefs = useRef<Map<number, HTMLElement>>(new Map())
   const chipRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
-  const dayStripRef = useRef<HTMLDivElement>(null)
-  const isProgrammaticScrollingRef = useRef(false)
-  const programmaticScrollTimerRef = useRef<number | null>(null)
-  const scrollAfterAddRef = useRef<number | null>(null)
 
-  const getScrollAnchorY = useCallback(() => {
-    const stripBottom = dayStripRef.current?.getBoundingClientRect().bottom
-    return stripBottom ?? 112
-  }, [])
-
-  const updateActiveDayFromScroll = useCallback(() => {
-    if (isProgrammaticScrollingRef.current) return
-
-    const anchorY = getScrollAnchorY()
-    let nextActive = days[0]?.day ?? 1
-
-    for (const day of days) {
-      const el = dayRefs.current.get(day.day)
-      if (!el) continue
-      const top = el.getBoundingClientRect().top
-      if (top <= anchorY + SCROLL_ANCHOR_BUFFER) {
-        nextActive = day.day
-      }
-    }
-
-    setActiveDay((prev) => {
-      if (prev === nextActive) return prev
-      chipRefs.current.get(nextActive)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-      return nextActive
-    })
-  }, [days, getScrollAnchorY])
-
-  const endProgrammaticScroll = useCallback(() => {
-    if (!isProgrammaticScrollingRef.current) return
-    isProgrammaticScrollingRef.current = false
-    if (programmaticScrollTimerRef.current !== null) {
-      window.clearTimeout(programmaticScrollTimerRef.current)
-      programmaticScrollTimerRef.current = null
-    }
-    updateActiveDayFromScroll()
-  }, [updateActiveDayFromScroll])
-
-  const startProgrammaticScroll = useCallback(() => {
-    isProgrammaticScrollingRef.current = true
-    if (programmaticScrollTimerRef.current !== null) {
-      window.clearTimeout(programmaticScrollTimerRef.current)
-    }
-    programmaticScrollTimerRef.current = window.setTimeout(endProgrammaticScroll, PROGRAMMATIC_SCROLL_MS)
-  }, [endProgrammaticScroll])
+  useItineraryRealtime(tripId, onReload)
 
   const itemsByDay = useMemo(() => {
     const map = new Map<number, Trip['itinerary']>()
@@ -106,37 +50,18 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
     return map
   }, [days, trip.itinerary])
 
-  const scrollToDay = useCallback((day: number, behavior: ScrollBehavior = 'smooth') => {
-    requestAnimationFrame(() => {
-      dayRefs.current.get(day)?.scrollIntoView({ behavior, block: 'start' })
-      chipRefs.current.get(day)?.scrollIntoView({ behavior, inline: 'center', block: 'nearest' })
-    })
-  }, [])
+  const activeDayInfo = useMemo(
+    () => days.find((day) => day.day === activeDay) ?? days[0],
+    [days, activeDay],
+  )
+
+  const activeItems = itemsByDay.get(activeDay) ?? []
 
   useEffect(() => {
-    window.addEventListener('scroll', updateActiveDayFromScroll, { passive: true })
-    window.addEventListener('scrollend', endProgrammaticScroll)
-    updateActiveDayFromScroll()
-
-    return () => {
-      window.removeEventListener('scroll', updateActiveDayFromScroll)
-      window.removeEventListener('scrollend', endProgrammaticScroll)
-      if (programmaticScrollTimerRef.current !== null) {
-        window.clearTimeout(programmaticScrollTimerRef.current)
-      }
+    if (!days.some((day) => day.day === activeDay)) {
+      setActiveDay(days[0]?.day ?? 1)
     }
-  }, [updateActiveDayFromScroll, endProgrammaticScroll, expandedDays])
-
-  useEffect(() => {
-    if (scrollAfterAddRef.current === null) return
-    const day = scrollAfterAddRef.current
-    scrollAfterAddRef.current = null
-    setExpandedDays((prev) => new Set(prev).add(day))
-    setActiveDay(day)
-    startProgrammaticScroll()
-    const timer = setTimeout(() => scrollToDay(day), 150)
-    return () => clearTimeout(timer)
-  }, [trip.itinerary, scrollToDay, startProgrammaticScroll])
+  }, [days, activeDay])
 
   const resetForm = () => {
     setTime('')
@@ -146,26 +71,15 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
     setError('')
   }
 
-  const openAdd = (day: number) => {
+  const openAdd = (day: number = activeDay) => {
     setSelectedDay(day)
     resetForm()
     setShowModal(true)
   }
 
-  const toggleDay = (day: number) => {
-    setExpandedDays((prev) => {
-      const next = new Set(prev)
-      if (next.has(day)) next.delete(day)
-      else next.add(day)
-      return next
-    })
-  }
-
   const handleChipClick = (day: number) => {
     setActiveDay(day)
-    setExpandedDays((prev) => new Set(prev).add(day))
-    startProgrammaticScroll()
-    scrollToDay(day)
+    chipRefs.current.get(day)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   }
 
   const handleAdd = async () => {
@@ -183,7 +97,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
         note: note.trim(),
         createdBy: memberId,
       })
-      scrollAfterAddRef.current = selectedDay
+      setActiveDay(selectedDay)
       await onReload()
       setShowModal(false)
       resetForm()
@@ -192,6 +106,10 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
     } finally {
       setSubmitting(false)
     }
+  }
+
+  if (!activeDayInfo) {
+    return null
   }
 
   return (
@@ -203,7 +121,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
         </div>
       )}
 
-      <div className="day-strip" ref={dayStripRef} role="tablist" aria-label="快速切換日期">
+      <div className="day-strip" role="tablist" aria-label="快速切換日期">
         {days.map((day) => {
           const count = itemsByDay.get(day.day)?.length ?? 0
           const isActive = activeDay === day.day
@@ -228,83 +146,43 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
         })}
       </div>
 
-      {days.map((day) => {
-        const items = itemsByDay.get(day.day) ?? []
-        const isExpanded = expandedDays.has(day.day)
+      <section className="day-section day-section--single">
+        <div className="day-header day-header--static">
+          <div className="day-header-main">
+            <h3 className="day-title">Day {activeDayInfo.day}</h3>
+            <p className="day-header-meta">
+              {activeDayInfo.shortDate} {activeDayInfo.weekday} · {activeItems.length} 個行程
+            </p>
+          </div>
+          {canEdit && (
+            <Button size="sm" variant="ghost" onClick={() => openAdd(activeDay)}>
+              + 新增
+            </Button>
+          )}
+        </div>
 
-        return (
-          <section
-            key={day.day}
-            ref={(el) => {
-              if (el) dayRefs.current.set(day.day, el)
-              else dayRefs.current.delete(day.day)
-            }}
-            data-day={day.day}
-            className={`day-section ${isExpanded ? 'day-section--expanded' : 'day-section--collapsed'}`}
-          >
-            <div
-              className="day-header"
-              onClick={() => toggleDay(day.day)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault()
-                  toggleDay(day.day)
-                }
-              }}
-              role="button"
-              tabIndex={0}
-              aria-expanded={isExpanded}
-            >
-              <div className="day-header-main">
-                <div className="day-header-top">
-                  <h3 className="day-title">Day {day.day}</h3>
-                  <span className={`day-chevron ${isExpanded ? 'day-chevron--open' : ''}`} aria-hidden="true">
-                    ▾
-                  </span>
+        {activeItems.length === 0 ? (
+          <div className="day-empty-state">
+            <p className="day-empty-state-title">還沒有行程</p>
+            <p className="day-empty-state-hint">
+              {canEdit ? '點「+ 新增」加入第一個行程' : '目前這天還沒有行程'}
+            </p>
+          </div>
+        ) : (
+          <div className="day-items">
+            {activeItems.map((item) => (
+              <Card key={item.id} className="itinerary-card">
+                <div className="itinerary-time">{item.time || '全天'}</div>
+                <div className="itinerary-body">
+                  <h4 className="itinerary-title">{item.title}</h4>
+                  {item.location && <p className="itinerary-location">📍 {item.location}</p>}
+                  {item.note && <p className="itinerary-note">{item.note}</p>}
                 </div>
-                <p className="day-header-meta">
-                  {day.shortDate} {day.weekday} · {items.length} 個行程
-                </p>
-              </div>
-              {canEdit && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    openAdd(day.day)
-                  }}
-                >
-                  + 新增
-                </Button>
-              )}
-            </div>
-
-            {isExpanded && (
-              <>
-                {items.length === 0 ? (
-                  <p className="day-empty">尚無行程</p>
-                ) : (
-                  <div className="day-items">
-                    {items.map((item) => (
-                      <Card key={item.id} className="itinerary-card">
-                        <div className="itinerary-time">{item.time || '全天'}</div>
-                        <div className="itinerary-body">
-                          <h4 className="itinerary-title">{item.title}</h4>
-                          {item.location && (
-                            <p className="itinerary-location">📍 {item.location}</p>
-                          )}
-                          {item.note && <p className="itinerary-note">{item.note}</p>}
-                        </div>
-                      </Card>
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
-          </section>
-        )
-      })}
+              </Card>
+            ))}
+          </div>
+        )}
+      </section>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="新增行程">
         <div className="form">
@@ -314,12 +192,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
             onChange={(e) => setSelectedDay(Number(e.target.value))}
             options={days.map((d) => ({ value: String(d.day), label: d.label }))}
           />
-          <Input
-            label="時間"
-            type="time"
-            value={time}
-            onChange={(e) => setTime(e.target.value)}
-          />
+          <Input label="時間" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           <Input
             label="標題"
             placeholder="例：清水寺參觀"

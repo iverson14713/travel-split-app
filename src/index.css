@@ -884,6 +884,39 @@ textarea {
   scroll-margin-top: calc(var(--tab-nav-height) + 5.5rem);
 }
 
+.day-section--single {
+  gap: 0.75rem;
+}
+
+.day-header--static {
+  cursor: default;
+}
+
+.day-header--static:hover {
+  border-color: var(--color-border);
+  box-shadow: none;
+}
+
+.day-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 2rem 1rem;
+  text-align: center;
+}
+
+.day-empty-state-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.day-empty-state-hint {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
 .day-section--collapsed {
   gap: 0;
 }
