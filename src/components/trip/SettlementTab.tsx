@@ -6,6 +6,7 @@ import {
   formatAmount,
 } from '../../utils/settlement'
 import { Button } from '../ui/Button'
+import type { UpgradeReason } from '../../services/tripUnlockService'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 
 interface SettlementTabProps {
@@ -13,9 +14,10 @@ interface SettlementTabProps {
   tripId: string
   currentMemberId?: string
   onReload: () => Promise<void>
+  onUpgradeRequired?: (reason: UpgradeReason) => void
 }
 
-export function SettlementTab({ trip, tripId, currentMemberId, onReload }: SettlementTabProps) {
+export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgradeRequired }: SettlementTabProps) {
   const [showRepayModal, setShowRepayModal] = useState(false)
   const [repayPreset, setRepayPreset] = useState<ExpenseUpsertModalPreset | undefined>(undefined)
 
@@ -92,6 +94,7 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload }: Settl
         currentMemberId={currentMemberId}
         preset={repayPreset}
         onSaved={onReload}
+        onUpgradeRequired={onUpgradeRequired}
       />
     </div>
   )

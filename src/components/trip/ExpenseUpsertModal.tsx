@@ -4,6 +4,8 @@ import { TRAVEL_CURRENCIES } from '../../constants/currencies'
 import { DEFAULT_EXPENSE_CATEGORY, EXPENSE_CATEGORIES } from '../../constants/expenseCategories'
 import { addExpense, updateExpense } from '../../services/tripService'
 import { buildTwdEstimateHint } from '../../services/exchangeRateService'
+import { checkExpenseLimit } from '../../services/tripUnlockService'
+import type { UpgradeReason } from '../../services/tripUnlockService'
 import { getExchangeRateForCurrency } from '../../utils/settlement'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
@@ -36,6 +38,7 @@ interface ExpenseUpsertModalProps {
   preset?: ExpenseUpsertModalPreset
   expense?: Expense
   onSaved: () => Promise<void>
+  onUpgradeRequired?: (reason: UpgradeReason) => void
 }
 
 export function ExpenseUpsertModal({
@@ -48,6 +51,7 @@ export function ExpenseUpsertModal({
   preset,
   expense,
   onSaved,
+  onUpgradeRequired,
 }: ExpenseUpsertModalProps) {
   const defaultPayer = currentMemberId ?? trip.members[0]?.id ?? ''
 
@@ -132,6 +136,14 @@ export function ExpenseUpsertModal({
     setSubmitting(true)
     setError('')
     try {
+      if (!expense) {
+        const blocked = checkExpenseLimit(trip)
+        if (blocked) {
+          onUpgradeRequired?.(blocked)
+          return
+        }
+      }
+
       const exchangeRateToTwd =
         expense && (expense.currency || 'TWD').toUpperCase() === currency
           ? expense.exchangeRateToTwd

@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import type { EditPermission, Trip } from '../../types'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import { archiveTrip, restoreTrip, softDeleteTrip, updateEditPermission, updateMemberName } from '../../services/tripService'
+import { useTripUnlock } from '../../hooks/useTripUnlock'
+import type { UpgradeReason } from '../../services/tripUnlockService'
+import { FREE_LIMITS } from '../../constants/freeLimits'
 import { ExchangeRateSettings } from './ExchangeRateSettings'
+import { FreeUsageHint } from './FreeUsageHint'
+import { MemberLimitBanner } from './MemberLimitBanner'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { Button } from '../ui/Button'
@@ -16,9 +21,17 @@ interface SettingsPanelProps {
   isHost: boolean
   currentMemberId?: string
   onReload: (options?: ReloadOptions) => Promise<void>
+  onUpgradeRequired?: (reason: UpgradeReason) => void
 }
 
-export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload }: SettingsPanelProps) {
+export function SettingsPanel({
+  trip,
+  tripId,
+  isHost,
+  currentMemberId,
+  onReload,
+  onUpgradeRequired,
+}: SettingsPanelProps) {
   const [copied, setCopied] = useState(false)
   const [lineCopied, setLineCopied] = useState(false)
   const [updating, setUpdating] = useState(false)
@@ -27,6 +40,11 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const shareLink = getShareLink(trip.code)
+  const { usage } = useTripUnlock(trip)
+  const showMemberFullBanner =
+    usage != null &&
+    !usage.isUnlimited &&
+    usage.members >= FREE_LIMITS.maxMembers
 
   const myMember = useMemo(
     () => trip.members.find((m) => m.id === currentMemberId),
@@ -116,6 +134,25 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
 
   return (
     <div className="settings-panel">
+      {usage && (
+        <section className="settings-section settings-section--usage">
+          <FreeUsageHint usage={usage} />
+          {!usage.isUnlimited && onUpgradeRequired && (
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              fullWidth
+              onClick={() =>
+                onUpgradeRequired(showMemberFullBanner ? 'member_limit_full' : 'manual_unlock')
+              }
+            >
+              解鎖這趟旅程
+            </Button>
+          )}
+        </section>
+      )}
+
       <section className="settings-section">
         <h3 className="settings-title">我的暱稱</h3>
         <Card className="settings-card">
@@ -177,6 +214,13 @@ export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload 
 
       <section className="settings-section">
         <h3 className="settings-title">分享資訊</h3>
+        {showMemberFullBanner && onUpgradeRequired && (
+          <MemberLimitBanner
+            memberCount={usage!.members}
+            maxMembers={FREE_LIMITS.maxMembers}
+            onUpgrade={() => onUpgradeRequired('member_limit_full')}
+          />
+        )}
         <Card className="settings-card">
           <div className="settings-row">
             <span className="settings-label">旅行代碼</span>

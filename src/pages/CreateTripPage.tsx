@@ -4,7 +4,14 @@ import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
+import { UpgradeModal } from '../components/trip/UpgradeModal'
 import { createTrip } from '../services/tripService'
+import { checkCreateMemberPlan, checkDayLimit, mockUnlockTrip } from '../services/tripUnlockService'
+import type { UpgradeReason } from '../services/tripUnlockService'
+import {
+  ESTIMATED_MEMBER_OPTIONS,
+  type EstimatedMemberCount,
+} from '../constants/freeLimits'
 import {
   fetchLatestExchangeRatesToTwd,
   formatRateSummaryLine,
@@ -22,12 +29,53 @@ export function CreateTripPage() {
   const [destination, setDestination] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [estimatedMembers, setEstimatedMembers] = useState<EstimatedMemberCount>(2)
   const [createdCode, setCreatedCode] = useState<string | null>(null)
   const [createdRates, setCreatedRates] = useState<ExchangeRatesResult | null>(null)
   const [copied, setCopied] = useState(false)
   const [lineCopied, setLineCopied] = useState(false)
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
+
+  const executeCreate = async (unlockAfterCreate = false) => {
+    setSubmitting(true)
+    try {
+      const rates = await fetchLatestExchangeRatesToTwd()
+      const { trip, memberId } = await createTrip({
+        ownerName: ownerName.trim() || '主揪',
+        name: name.trim(),
+        destination: destination.trim(),
+        startDate,
+        endDate,
+        estimatedMemberCount: estimatedMembers,
+        exchangeRatesToTwd: rates.ratesToTwd,
+        jpyToTwdRate: rates.ratesToTwd.JPY,
+        usdToTwdRate: rates.ratesToTwd.USD,
+        exchangeRateSource: rates.source,
+        exchangeRateFetchedAt: rates.fetchedAt,
+      })
+
+      if (unlockAfterCreate) {
+        mockUnlockTrip(trip.id)
+      }
+
+      setSession({ tripCode: trip.code, memberId })
+      recordRecentTrip({
+        tripCode: trip.code,
+        tripName: trip.name,
+        destination: trip.destination,
+        memberId,
+        memberName: ownerName.trim() || '主揪',
+      })
+      setCreatedRates(rates)
+      setCreatedCode(trip.code)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '建立旅行失敗，請稍後再試')
+    } finally {
+      setSubmitting(false)
+    }
+  }
 
   const handleCreate = async () => {
     setError('')
@@ -48,37 +96,23 @@ export function CreateTripPage() {
       return
     }
 
-    setSubmitting(true)
-    try {
-      const rates = await fetchLatestExchangeRatesToTwd()
-      const { trip, memberId } = await createTrip({
-        ownerName: ownerName.trim() || '主揪',
-        name: name.trim(),
-        destination: destination.trim(),
-        startDate,
-        endDate,
-        exchangeRatesToTwd: rates.ratesToTwd,
-        jpyToTwdRate: rates.ratesToTwd.JPY,
-        usdToTwdRate: rates.ratesToTwd.USD,
-        exchangeRateSource: rates.source,
-        exchangeRateFetchedAt: rates.fetchedAt,
-      })
-
-      setSession({ tripCode: trip.code, memberId })
-      recordRecentTrip({
-        tripCode: trip.code,
-        tripName: trip.name,
-        destination: trip.destination,
-        memberId,
-        memberName: ownerName.trim() || '主揪',
-      })
-      setCreatedRates(rates)
-      setCreatedCode(trip.code)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '建立旅行失敗，請稍後再試')
-    } finally {
-      setSubmitting(false)
+    const dayBlocked = checkDayLimit(startDate, endDate)
+    if (dayBlocked) {
+      setUpgradeReason(dayBlocked)
+      return
     }
+
+    const memberBlocked = checkCreateMemberPlan(estimatedMembers)
+    if (memberBlocked) {
+      setUpgradeReason(memberBlocked)
+      return
+    }
+
+    await executeCreate(false)
+  }
+
+  const handleUnlockAndCreate = async () => {
+    await executeCreate(true)
   }
 
   const shareLink = createdCode ? getShareLink(createdCode) : ''
@@ -191,6 +225,25 @@ export function CreateTripPage() {
             onChange={(e) => setEndDate(e.target.value)}
           />
 
+          <div className="form-field">
+            <span className="form-label">預計同行人數</span>
+            <div className="segmented-control" role="group" aria-label="預計同行人數">
+              {ESTIMATED_MEMBER_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`segmented-control__option${
+                    estimatedMembers === opt.value ? ' segmented-control__option--active' : ''
+                  }`}
+                  onClick={() => setEstimatedMembers(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="segmented-control-hint">含你自己在內的預計人數。5 人以上需解鎖後建立。</p>
+          </div>
+
           <div className="page-tip">
             <strong>匯率估算</strong>
             <br />
@@ -205,6 +258,15 @@ export function CreateTripPage() {
             {submitting ? '建立中...' : '建立旅行'}
           </Button>
         </form>
+
+        <UpgradeModal
+          open={upgradeReason != null}
+          onClose={() => setUpgradeReason(null)}
+          reason={upgradeReason ?? 'day_limit'}
+          onUnlockAndProceed={
+            upgradeReason === 'create_member_limit' ? handleUnlockAndCreate : undefined
+          }
+        />
       </div>
     </Layout>
   )

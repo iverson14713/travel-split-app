@@ -4,9 +4,11 @@ import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
+import { MemberJoinBlockedCard } from '../components/trip/MemberJoinBlockedCard'
 import { fetchTripByCode, joinTrip } from '../services/tripService'
+import { checkMemberLimit } from '../services/tripUnlockService'
 import { getSession, hasSessionForTrip, setSession, recordRecentTrip } from '../utils/storage'
-import type { Member } from '../types'
+import type { Member, Trip } from '../types'
 
 export function JoinTripPage() {
   const navigate = useNavigate()
@@ -23,6 +25,7 @@ export function JoinTripPage() {
   const [members, setMembers] = useState<Member[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState('')
   const [duplicateMember, setDuplicateMember] = useState<Member | null>(null)
+  const [fetchedTrip, setFetchedTrip] = useState<Trip | null>(null)
 
   useEffect(() => {
     if (urlCode) setCode(urlCode)
@@ -56,10 +59,12 @@ export function JoinTripPage() {
           setTripDestination('')
           setMembers([])
           setSelectedMemberId('')
+          setFetchedTrip(null)
           return
         }
 
         setTripFound(true)
+        setFetchedTrip(trip)
         setTripName(trip.name)
         setTripDestination(trip.destination)
         setMembers(trip.members)
@@ -72,6 +77,7 @@ export function JoinTripPage() {
         setTripDestination('')
         setMembers([])
         setSelectedMemberId('')
+        setFetchedTrip(null)
       })
       .finally(() => {
         if (!cancelled) setCheckingTrip(false)
@@ -94,6 +100,8 @@ export function JoinTripPage() {
     })
     navigate(`/trip/${trimmedCode}`, joined ? { state: { joined: true } } : undefined)
   }
+
+  const isMemberFull = fetchedTrip ? checkMemberLimit(fetchedTrip) != null : false
 
   const handleJoin = async () => {
     setError('')
@@ -123,11 +131,19 @@ export function JoinTripPage() {
       return
     }
 
+    if (isMemberFull) {
+      return
+    }
+
     setSubmitting(true)
     try {
-      const trip = await fetchTripByCode(trimmedCode)
+      const trip = fetchedTrip ?? (await fetchTripByCode(trimmedCode))
       if (!trip) {
         setError('此旅行已不存在或已被刪除')
+        return
+      }
+
+      if (checkMemberLimit(trip)) {
         return
       }
 
@@ -176,45 +192,51 @@ export function JoinTripPage() {
             <section className="card">
               <h3 className="tab-panel-title">第一次加入</h3>
               <div className="form" style={{ marginTop: '0.75rem' }}>
-                <Input
-                  label="你的暱稱"
-                  placeholder="例：小明"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
-                  autoFocus={!!urlCode}
-                />
-
-                {duplicateMember && (
-                  <div className="settlement-notice" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}>
-                    <span>👀</span>
-                    <p>這個名字已經在旅程中，你是 {duplicateMember.nickname} 嗎？</p>
-                  </div>
-                )}
-
-                {duplicateMember ? (
-                  <div className="page-actions" style={{ marginTop: '0.25rem' }}>
-                    <Button
-                      fullWidth
-                      onClick={() => saveAndEnterTrip(duplicateMember.id, duplicateMember.nickname)}
-                    >
-                      我是 {duplicateMember.nickname}，直接進入
-                    </Button>
-                    <Button fullWidth variant="outline" onClick={() => { setDuplicateMember(null); setNickname('') }}>
-                      不是，我要換名字
-                    </Button>
-                  </div>
+                {isMemberFull && !duplicateMember ? (
+                  <MemberJoinBlockedCard />
                 ) : (
-                  <Button
-                    fullWidth
-                    size="lg"
-                    onClick={handleJoin}
-                    disabled={submitting || checkingTrip}
-                  >
-                    {submitting ? '加入中...' : '加入旅程'}
-                  </Button>
-                )}
+                  <>
+                    <Input
+                      label="你的暱稱"
+                      placeholder="例：小明"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      autoFocus={!!urlCode}
+                    />
 
-                {error && <p className="form-error-msg">{error}</p>}
+                    {duplicateMember && (
+                      <div className="settlement-notice" style={{ background: 'var(--color-primary-light)', color: 'var(--color-primary-dark)' }}>
+                        <span>👀</span>
+                        <p>這個名字已經在旅程中，你是 {duplicateMember.nickname} 嗎？</p>
+                      </div>
+                    )}
+
+                    {duplicateMember ? (
+                      <div className="page-actions" style={{ marginTop: '0.25rem' }}>
+                        <Button
+                          fullWidth
+                          onClick={() => saveAndEnterTrip(duplicateMember.id, duplicateMember.nickname)}
+                        >
+                          我是 {duplicateMember.nickname}，直接進入
+                        </Button>
+                        <Button fullWidth variant="outline" onClick={() => { setDuplicateMember(null); setNickname('') }}>
+                          不是，我要換名字
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button
+                        fullWidth
+                        size="lg"
+                        onClick={handleJoin}
+                        disabled={submitting || checkingTrip}
+                      >
+                        {submitting ? '加入中...' : '加入旅程'}
+                      </Button>
+                    )}
+
+                    {error && <p className="form-error-msg">{error}</p>}
+                  </>
+                )}
               </div>
             </section>
 

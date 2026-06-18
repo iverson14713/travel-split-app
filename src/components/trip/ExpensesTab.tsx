@@ -2,15 +2,17 @@ import { useState } from 'react'
 import type { Expense, Trip } from '../../types'
 import { formatAmount, resolveExchangeRateToTwd, toTwdAmount } from '../../utils/settlement'
 import { Card } from '../ui/Card'
+import { Button } from '../ui/Button'
 import { ExpenseDetailModal } from './ExpenseDetailModal'
 import { ExpenseUpsertModal } from './ExpenseUpsertModal'
-import { Button } from '../ui/Button'
+import type { UpgradeReason } from '../../services/tripUnlockService'
 
 interface ExpensesTabProps {
   trip: Trip
   tripId: string
   currentMemberId?: string
   onReload: () => Promise<void>
+  onUpgradeRequired?: (reason: UpgradeReason) => void
 }
 
 function ExpenseCompactCard({
@@ -66,7 +68,7 @@ function ExpenseCompactCard({
   )
 }
 
-export function ExpensesTab({ trip, tripId, currentMemberId, onReload }: ExpensesTabProps) {
+export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgradeRequired }: ExpensesTabProps) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
@@ -129,6 +131,7 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload }: Expense
         tripId={tripId}
         currentMemberId={currentMemberId}
         onSaved={onReload}
+        onUpgradeRequired={onUpgradeRequired}
       />
 
       <ExpenseUpsertModal
@@ -140,6 +143,7 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload }: Expense
         currentMemberId={currentMemberId}
         expense={editingExpense ?? undefined}
         onSaved={onReload}
+        onUpgradeRequired={onUpgradeRequired}
       />
     </div>
   )

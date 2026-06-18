@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
+import { useTripUnlock } from '../hooks/useTripUnlock'
 import { getSession, recordRecentTrip } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getShareLink } from '../utils/tripCode'
@@ -13,6 +14,9 @@ import { ExpensesTab } from '../components/trip/ExpensesTab'
 import { OverviewTab } from '../components/trip/OverviewTab'
 import { SettlementTab } from '../components/trip/SettlementTab'
 import { SettingsPanel } from '../components/trip/SettingsTab'
+import { UpgradeModal } from '../components/trip/UpgradeModal'
+import { DeveloperModeModal } from '../components/trip/DeveloperModeModal'
+import type { UpgradeReason } from '../services/tripUnlockService'
 
 type Tab = 'itinerary' | 'expenses' | 'overview' | 'settlement'
 
@@ -32,6 +36,11 @@ export function TripRoomPage() {
   const [copied, setCopied] = useState(false)
   const [showJoinedToast, setShowJoinedToast] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
+  const [titleTapCount, setTitleTapCount] = useState(0)
+  const [showDeveloperModal, setShowDeveloperModal] = useState(false)
+  const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
+
+  const { refresh: refreshUnlock } = useTripUnlock(trip)
 
   const tripCode = code?.toUpperCase() ?? ''
   const session = getSession()
@@ -69,6 +78,31 @@ export function TripRoomPage() {
     await navigator.clipboard.writeText(getShareLink(trip.code))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
+  }
+
+  const handleTitleTap = () => {
+    setTitleTapCount((count) => {
+      const next = count + 1
+      if (next >= 7) {
+        setShowDeveloperModal(true)
+        return 0
+      }
+      return next
+    })
+  }
+
+  useEffect(() => {
+    if (titleTapCount === 0) return
+    const timer = window.setTimeout(() => setTitleTapCount(0), 2000)
+    return () => window.clearTimeout(timer)
+  }, [titleTapCount])
+
+  const handleShowUpgrade = (reason: UpgradeReason) => {
+    setUpgradeReason(reason)
+  }
+
+  const handleUnlockChanged = () => {
+    refreshUnlock()
   }
 
   if (loading || !hasValidSession) {
@@ -120,7 +154,9 @@ export function TripRoomPage() {
         <header className="trip-header">
           <div className="trip-header-top">
             <div className="trip-title-row">
-              <h1 className="trip-name">{trip.name}</h1>
+              <h1 className="trip-name" onClick={handleTitleTap}>
+                {trip.name}
+              </h1>
               {trip.status === 'archived' && <span className="trip-badge">已封存</span>}
             </div>
             <div className="trip-header-actions">
@@ -173,6 +209,7 @@ export function TripRoomPage() {
               tripId={trip.id}
               currentMemberId={currentMember?.id}
               onReload={reload}
+              onUpgradeRequired={handleShowUpgrade}
             />
           )}
           {activeTab === 'overview' && (
@@ -188,6 +225,7 @@ export function TripRoomPage() {
               tripId={trip.id}
               currentMemberId={currentMember?.id}
               onReload={reload}
+              onUpgradeRequired={handleShowUpgrade}
             />
           )}
         </div>
@@ -200,8 +238,24 @@ export function TripRoomPage() {
           isHost={currentMember?.isHost ?? false}
           currentMemberId={currentMember?.id}
           onReload={reload}
+          onUpgradeRequired={handleShowUpgrade}
         />
       </Modal>
+
+      <UpgradeModal
+        open={upgradeReason != null}
+        onClose={() => setUpgradeReason(null)}
+        reason={upgradeReason ?? 'manual_unlock'}
+        trip={trip}
+        onUnlocked={handleUnlockChanged}
+      />
+
+      <DeveloperModeModal
+        open={showDeveloperModal}
+        onClose={() => setShowDeveloperModal(false)}
+        tripId={trip.id}
+        onChanged={handleUnlockChanged}
+      />
     </Layout>
   )
 }

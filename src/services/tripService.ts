@@ -22,6 +22,7 @@ interface TripRow {
   exchange_rate_source: ExchangeRateSource
   exchange_rate_fetched_at: string | null
   exchange_rates_to_twd: Record<string, number> | null
+  estimated_member_count: number | null
   created_at: string
 }
 
@@ -150,6 +151,7 @@ function mapTrip(
     exchangeRateSource: row.exchange_rate_source ?? 'fallback',
     exchangeRateFetchedAt: row.exchange_rate_fetched_at ?? undefined,
     exchangeRatesToTwd,
+    estimatedMemberCount: row.estimated_member_count ?? undefined,
     members: members.map(mapMember),
     itinerary: itinerary.map(mapItinerary),
     expenses: expenses.map((expenseRow) => mapExpense(expenseRow, exchangeRatesToTwd)),
@@ -232,6 +234,7 @@ export interface CreateTripInput {
   startDate: string
   endDate: string
   ownerName?: string
+  estimatedMemberCount?: number
   exchangeRatesToTwd?: Record<string, number>
   jpyToTwdRate?: number
   usdToTwdRate?: number
@@ -270,6 +273,7 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
       exchange_rates_to_twd: exchangeRatesToTwd,
       exchange_rate_source: input.exchangeRateSource ?? 'fallback',
       exchange_rate_fetched_at: input.exchangeRateFetchedAt ?? null,
+      estimated_member_count: input.estimatedMemberCount ?? null,
     })
     .select()
     .single()
