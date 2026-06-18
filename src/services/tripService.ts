@@ -1,6 +1,6 @@
 import { requireSupabase } from '../lib/supabase'
 import { DB_TABLES } from '../lib/database.tables'
-import type { EditPermission, Expense, ExpenseType, ItineraryItem, Member, Trip, TripStatus } from '../types'
+import type { EditPermission, ExchangeRateSource, Expense, ExpenseType, ItineraryItem, Member, Trip, TripStatus } from '../types'
 import { generateTripCode } from '../utils/tripCode'
 
 interface TripRow {
@@ -15,6 +15,11 @@ interface TripRow {
   archived_at: string | null
   deleted_at: string | null
   edit_permission: EditPermission
+  base_currency: string
+  jpy_to_twd_rate: number
+  usd_to_twd_rate: number
+  exchange_rate_source: ExchangeRateSource
+  exchange_rate_fetched_at: string | null
   created_at: string
 }
 
@@ -46,6 +51,7 @@ interface ExpenseRow {
   type: ExpenseType
   amount: number
   currency: string
+  exchange_rate_to_twd: number | null
   category: string | null
   note: string | null
   participant_member_ids: string[]
@@ -72,12 +78,22 @@ function mapItinerary(row: ItineraryRow): ItineraryItem {
   }
 }
 
-function mapExpense(row: ExpenseRow): Expense {
+function mapExpense(row: ExpenseRow, tripRates?: { jpyToTwdRate: number; usdToTwdRate: number }): Expense {
+  const currency = (row.currency || 'TWD').toUpperCase()
+  let exchangeRateToTwd = row.exchange_rate_to_twd != null ? Number(row.exchange_rate_to_twd) : NaN
+  if (!Number.isFinite(exchangeRateToTwd) || exchangeRateToTwd <= 0) {
+    if (currency === 'TWD') exchangeRateToTwd = 1
+    else if (currency === 'JPY') exchangeRateToTwd = tripRates?.jpyToTwdRate ?? 0.215
+    else if (currency === 'USD') exchangeRateToTwd = tripRates?.usdToTwdRate ?? 32
+    else exchangeRateToTwd = 1
+  }
+
   return {
     id: row.id,
     type: row.type ?? 'expense',
     amount: Number(row.amount),
     currency: row.currency,
+    exchangeRateToTwd,
     payerId: row.payer_member_id ?? '',
     receiverId: row.receiver_member_id ?? undefined,
     participantIds: row.participant_member_ids ?? [],
@@ -93,6 +109,11 @@ function mapTrip(
   itinerary: ItineraryRow[],
   expenses: ExpenseRow[],
 ): Trip {
+  const tripRates = {
+    jpyToTwdRate: Number(row.jpy_to_twd_rate ?? 0.215),
+    usdToTwdRate: Number(row.usd_to_twd_rate ?? 32),
+  }
+
   return {
     id: row.id,
     code: row.code,
@@ -104,9 +125,14 @@ function mapTrip(
     lastActivityAt: row.last_activity_at,
     archivedAt: row.archived_at ?? undefined,
     editPermission: row.edit_permission as EditPermission,
+    baseCurrency: row.base_currency ?? 'TWD',
+    jpyToTwdRate: tripRates.jpyToTwdRate,
+    usdToTwdRate: tripRates.usdToTwdRate,
+    exchangeRateSource: row.exchange_rate_source ?? 'fallback',
+    exchangeRateFetchedAt: row.exchange_rate_fetched_at ?? undefined,
     members: members.map(mapMember),
     itinerary: itinerary.map(mapItinerary),
-    expenses: expenses.map(mapExpense),
+    expenses: expenses.map((expenseRow) => mapExpense(expenseRow, tripRates)),
     createdAt: row.created_at,
   }
 }
@@ -186,6 +212,10 @@ export interface CreateTripInput {
   startDate: string
   endDate: string
   ownerName?: string
+  jpyToTwdRate?: number
+  usdToTwdRate?: number
+  exchangeRateSource?: ExchangeRateSource
+  exchangeRateFetchedAt?: string
 }
 
 export interface CreateTripResult {
@@ -206,6 +236,11 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
       start_date: input.startDate,
       end_date: input.endDate,
       edit_permission: 'owner_only',
+      base_currency: 'TWD',
+      jpy_to_twd_rate: input.jpyToTwdRate ?? 0.215,
+      usd_to_twd_rate: input.usdToTwdRate ?? 32,
+      exchange_rate_source: input.exchangeRateSource ?? 'fallback',
+      exchange_rate_fetched_at: input.exchangeRateFetchedAt ?? null,
     })
     .select()
     .single()
@@ -279,6 +314,7 @@ export async function addExpense(input: {
   receiverMemberId?: string
   amount: number
   currency: string
+  exchangeRateToTwd: number
   category: string
   note: string
   participantMemberIds: string[]
@@ -292,6 +328,7 @@ export async function addExpense(input: {
     receiver_member_id: input.receiverMemberId ?? null,
     amount: input.amount,
     currency: input.currency,
+    exchange_rate_to_twd: input.exchangeRateToTwd,
     category: input.category,
     note: input.note || null,
     participant_member_ids: input.participantMemberIds,
@@ -326,6 +363,35 @@ export async function updateEditPermission(
     .from(DB_TABLES.trips)
     .update({ edit_permission: permission, last_activity_at: new Date().toISOString() })
     .eq('id', tripId)
+
+  if (error) throw error
+}
+
+export async function updateExchangeRates(
+  tripId: string,
+  rates: {
+    jpyToTwdRate: number
+    usdToTwdRate: number
+    exchangeRateSource?: ExchangeRateSource
+    exchangeRateFetchedAt?: string
+  },
+): Promise<void> {
+  const db = requireSupabase()
+
+  const payload: Record<string, string | number> = {
+    jpy_to_twd_rate: rates.jpyToTwdRate,
+    usd_to_twd_rate: rates.usdToTwdRate,
+    last_activity_at: new Date().toISOString(),
+  }
+
+  if (rates.exchangeRateSource) {
+    payload.exchange_rate_source = rates.exchangeRateSource
+  }
+  if (rates.exchangeRateFetchedAt) {
+    payload.exchange_rate_fetched_at = rates.exchangeRateFetchedAt
+  }
+
+  const { error } = await db.from(DB_TABLES.trips).update(payload).eq('id', tripId)
 
   if (error) throw error
 }

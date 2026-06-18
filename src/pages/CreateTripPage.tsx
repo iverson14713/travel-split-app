@@ -5,6 +5,12 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { createTrip } from '../services/tripService'
+import {
+  fetchLatestExchangeRatesToTwd,
+  formatJpyPer100Twd,
+  formatUsdToTwd,
+  type ExchangeRatesToTwd,
+} from '../services/exchangeRateService'
 import { getShareLink } from '../utils/tripCode'
 import { getLineShareText } from '../utils/shareText'
 import { setSession, recordRecentTrip } from '../utils/storage'
@@ -17,6 +23,7 @@ export function CreateTripPage() {
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
   const [createdCode, setCreatedCode] = useState<string | null>(null)
+  const [createdRates, setCreatedRates] = useState<ExchangeRatesToTwd | null>(null)
   const [copied, setCopied] = useState(false)
   const [lineCopied, setLineCopied] = useState(false)
   const [error, setError] = useState('')
@@ -43,12 +50,17 @@ export function CreateTripPage() {
 
     setSubmitting(true)
     try {
+      const rates = await fetchLatestExchangeRatesToTwd()
       const { trip, memberId } = await createTrip({
         ownerName: ownerName.trim() || '主揪',
         name: name.trim(),
         destination: destination.trim(),
         startDate,
         endDate,
+        jpyToTwdRate: rates.jpyToTwdRate,
+        usdToTwdRate: rates.usdToTwdRate,
+        exchangeRateSource: rates.source,
+        exchangeRateFetchedAt: rates.fetchedAt,
       })
 
       setSession({ tripCode: trip.code, memberId })
@@ -59,6 +71,7 @@ export function CreateTripPage() {
         memberId,
         memberName: ownerName.trim() || '主揪',
       })
+      setCreatedRates(rates)
       setCreatedCode(trip.code)
     } catch (err) {
       setError(err instanceof Error ? err.message : '建立旅行失敗，請稍後再試')
@@ -100,6 +113,16 @@ export function CreateTripPage() {
               <span className="success-link">{shareLink}</span>
             </div>
           </Card>
+
+          {createdRates && (
+            <p className="page-tip">
+              目前估算匯率：
+              <br />
+              100 JPY ≈ TWD {formatJpyPer100Twd(createdRates.jpyToTwdRate)}
+              <br />
+              1 USD ≈ TWD {formatUsdToTwd(createdRates.usdToTwdRate)}
+            </p>
+          )}
 
           <div className="page-actions">
             <Button fullWidth onClick={handleCopy}>
@@ -160,6 +183,14 @@ export function CreateTripPage() {
             value={endDate}
             onChange={(e) => setEndDate(e.target.value)}
           />
+
+          <div className="page-tip">
+            <strong>匯率估算</strong>
+            <br />
+            建立旅行時會自動帶入目前匯率，用來估算總花費與結算金額。
+            <br />
+            之後可在設定中調整。
+          </div>
 
           {error && <p className="form-error-msg">{error}</p>}
 

@@ -1,7 +1,14 @@
-import type { Expense, Member, SettlementItem } from '../types'
+import type { Expense, Member, SettlementItem, Trip } from '../types'
 
 export type CurrencyFilter = 'TWD' | 'JPY' | 'USD' | 'ALL'
+export type DisplayMode = 'twd_estimate' | 'original'
 
+export const DISPLAY_MODE_OPTIONS: { value: DisplayMode; label: string }[] = [
+  { value: 'twd_estimate', label: '台幣估算' },
+  { value: 'original', label: '原幣別' },
+]
+
+/** @deprecated Use DISPLAY_MODE_OPTIONS */
 export const OVERVIEW_CURRENCIES: { value: CurrencyFilter; label: string }[] = [
   { value: 'TWD', label: 'TWD' },
   { value: 'JPY', label: 'JPY' },
@@ -9,9 +16,16 @@ export const OVERVIEW_CURRENCIES: { value: CurrencyFilter; label: string }[] = [
   { value: 'ALL', label: '全部' },
 ]
 
+export interface TripRates {
+  jpyToTwdRate: number
+  usdToTwdRate: number
+}
+
+const TWD = 'TWD'
+
 export function currencyDecimals(currency: string): number {
   const c = currency.toUpperCase()
-  if (c === 'TWD' || c === 'JPY' || c === 'KRW') return 0
+  if (c === TWD || c === 'JPY' || c === 'KRW') return 0
   return 2
 }
 
@@ -36,15 +50,41 @@ export function formatAmount(amount: number, currency: string): string {
   })
 }
 
+export function getExchangeRateForCurrency(currency: string, trip: Pick<Trip, 'jpyToTwdRate' | 'usdToTwdRate'>): number {
+  const c = currency.toUpperCase()
+  if (c === TWD) return 1
+  if (c === 'JPY') return trip.jpyToTwdRate
+  if (c === 'USD') return trip.usdToTwdRate
+  return 1
+}
+
+export function resolveExchangeRateToTwd(
+  exp: Expense,
+  tripRates?: TripRates,
+): number {
+  if (Number.isFinite(exp.exchangeRateToTwd) && exp.exchangeRateToTwd > 0) {
+    return exp.exchangeRateToTwd
+  }
+
+  const currency = (exp.currency || TWD).toUpperCase()
+  if (currency === TWD) return 1
+  if (currency === 'JPY') return tripRates?.jpyToTwdRate ?? 0.215
+  if (currency === 'USD') return tripRates?.usdToTwdRate ?? 32
+  return 1
+}
+
+export function toTwdAmount(amount: number, exchangeRateToTwd: number): number {
+  return roundAmount(amount * exchangeRateToTwd, TWD)
+}
+
 function filterExpensesByCurrency(expenses: Expense[], currencyFilter: CurrencyFilter): Expense[] {
   if (currencyFilter === 'ALL') return expenses
   return expenses.filter((exp) => (exp.currency || '').toUpperCase() === currencyFilter)
 }
 
-function getCurrenciesFromExpenses(expenses: Expense[], currencyFilter: CurrencyFilter): string[] {
-  const filtered = filterExpensesByCurrency(expenses, currencyFilter)
+function getCurrenciesFromExpenses(expenses: Expense[]): string[] {
   const set = new Set<string>()
-  for (const exp of filtered) {
+  for (const exp of expenses) {
     const currency = (exp.currency || '').toUpperCase()
     if (currency) set.add(currency)
   }
@@ -61,8 +101,9 @@ function applyExpenseToBalances(
   balances: Record<string, number>,
   exp: Expense,
   currency: string,
+  amountOverride?: number,
 ): void {
-  const amount = Number(exp.amount)
+  const amount = amountOverride ?? Number(exp.amount)
   if (!Number.isFinite(amount) || isZero(amount, currency)) return
 
   if (exp.type === 'transfer') {
@@ -100,7 +141,7 @@ export function calculateBalances(
   currencyFilter: CurrencyFilter = 'ALL',
 ): Record<string, Record<string, number>> {
   const filtered = filterExpensesByCurrency(expenses, currencyFilter)
-  const currencies = getCurrenciesFromExpenses(filtered, 'ALL')
+  const currencies = getCurrenciesFromExpenses(filtered)
   const result: Record<string, Record<string, number>> = {}
 
   for (const currency of currencies) {
@@ -111,6 +152,22 @@ export function calculateBalances(
   }
 
   return result
+}
+
+function calculateTwdBalances(
+  expenses: Expense[],
+  members: Member[],
+  tripRates?: TripRates,
+): Record<string, number> {
+  const balances = initMemberBalances(members)
+
+  for (const exp of expenses) {
+    const rate = resolveExchangeRateToTwd(exp, tripRates)
+    const amountTwd = toTwdAmount(Number(exp.amount), rate)
+    applyExpenseToBalances(balances, exp, TWD, amountTwd)
+  }
+
+  return finalizeBalances(balances, TWD)
 }
 
 export function calculateMyBalance(
@@ -126,6 +183,16 @@ export function calculateMyBalance(
       balance: balances[memberId] ?? 0,
     }))
     .filter(({ balance, currency }) => !isZero(balance, currency))
+}
+
+export function calculateMyBalanceInTwd(
+  expenses: Expense[],
+  members: Member[],
+  memberId: string,
+  tripRates?: TripRates,
+): number {
+  const balances = calculateTwdBalances(expenses, members, tripRates)
+  return balances[memberId] ?? 0
 }
 
 export function calculateMyTotalCost(
@@ -156,8 +223,32 @@ export function calculateMyTotalCost(
       currency,
       total: roundAmount(total, currency),
     }))
-    .filter(({ total, currency }) => !isZero(total, currency))
+    .filter(({ total, currency }) =>  !isZero(total, currency))
     .sort((a, b) => a.currency.localeCompare(b.currency))
+}
+
+export function calculateMyTotalCostInTwd(
+  expenses: Expense[],
+  memberId: string,
+  tripRates?: TripRates,
+): number {
+  let total = 0
+
+  for (const exp of expenses) {
+    if (exp.type !== 'expense') continue
+
+    const participants = exp.participantIds?.filter(Boolean) ?? []
+    if (!participants.includes(memberId)) continue
+
+    const amount = Number(exp.amount)
+    if (!Number.isFinite(amount) || participants.length === 0) continue
+
+    const rate = resolveExchangeRateToTwd(exp, tripRates)
+    const shareTwd = toTwdAmount(amount / participants.length, rate)
+    total += shareTwd
+  }
+
+  return roundAmount(total, TWD)
 }
 
 function minTransfersFromBalances(
@@ -202,32 +293,52 @@ export interface SettlementByCurrency {
   isBalanced: boolean
 }
 
+function buildSettlementItems(
+  balances: Record<string, number>,
+  currency: string,
+  members: Member[],
+): SettlementItem[] {
+  const memberById = new Map(members.map((member) => [member.id, member]))
+  const transfers = minTransfersFromBalances(balances, currency)
+
+  return transfers
+    .map((transfer) => ({
+      fromId: transfer.fromId,
+      from: memberById.get(transfer.fromId)?.nickname ?? '未知',
+      toId: transfer.toId,
+      to: memberById.get(transfer.toId)?.nickname ?? '未知',
+      amount: transfer.amount,
+      currency,
+    }))
+    .filter((item) => !isZero(item.amount, currency))
+}
+
 export function calculateSettlementTransfers(input: {
   members: Member[]
   expenses: Expense[]
 }): SettlementByCurrency[] {
   const { members, expenses } = input
-  const memberById = new Map(members.map((member) => [member.id, member]))
   const allBalances = calculateBalances(expenses, members, 'ALL')
   const results: SettlementByCurrency[] = []
 
   for (const [currency, balances] of Object.entries(allBalances)) {
-    const transfers = minTransfersFromBalances(balances, currency)
-    const items: SettlementItem[] = transfers
-      .map((transfer) => ({
-        fromId: transfer.fromId,
-        from: memberById.get(transfer.fromId)?.nickname ?? '未知',
-        toId: transfer.toId,
-        to: memberById.get(transfer.toId)?.nickname ?? '未知',
-        amount: transfer.amount,
-        currency,
-      }))
-      .filter((item) => !isZero(item.amount, currency))
-
+    const items = buildSettlementItems(balances, currency, members)
     results.push({ currency, items, isBalanced: items.length === 0 })
   }
 
   return results.sort((a, b) => a.currency.localeCompare(b.currency))
+}
+
+export function calculateSettlementTransfersInTwd(input: {
+  members: Member[]
+  expenses: Expense[]
+  tripRates?: TripRates
+}): SettlementByCurrency[] {
+  const { members, expenses, tripRates } = input
+  const balances = calculateTwdBalances(expenses, members, tripRates)
+  const items = buildSettlementItems(balances, TWD, members)
+
+  return [{ currency: TWD, items, isBalanced: items.length === 0 }]
 }
 
 /** @deprecated Use calculateSettlementTransfers */

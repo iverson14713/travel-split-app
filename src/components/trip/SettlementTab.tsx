@@ -1,8 +1,15 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import type { Trip } from '../../types'
 import { Card } from '../ui/Card'
-import { calculateSettlementTransfers, formatAmount } from '../../utils/settlement'
+import {
+  calculateSettlementTransfers,
+  calculateSettlementTransfersInTwd,
+  DISPLAY_MODE_OPTIONS,
+  formatAmount,
+  type DisplayMode,
+} from '../../utils/settlement'
 import { Button } from '../ui/Button'
+import { Select } from '../ui/Select'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 
 interface SettlementTabProps {
@@ -13,18 +20,41 @@ interface SettlementTabProps {
 }
 
 export function SettlementTab({ trip, tripId, currentMemberId, onReload }: SettlementTabProps) {
-  const byCurrency = calculateSettlementTransfers({
-    members: trip.members,
-    expenses: trip.expenses,
-  })
-
-  const hasAnyExpense = trip.expenses.length > 0
-  const hasAnySettlement = byCurrency.some((g) => g.items.length > 0)
+  const [displayMode, setDisplayMode] = useState<DisplayMode>('twd_estimate')
   const [showRepayModal, setShowRepayModal] = useState(false)
   const [repayPreset, setRepayPreset] = useState<ExpenseUpsertModalPreset | undefined>(undefined)
 
+  const tripRates = useMemo(
+    () => ({ jpyToTwdRate: trip.jpyToTwdRate, usdToTwdRate: trip.usdToTwdRate }),
+    [trip.jpyToTwdRate, trip.usdToTwdRate],
+  )
+
+  const byCurrency = useMemo(() => {
+    if (displayMode === 'twd_estimate') {
+      return calculateSettlementTransfersInTwd({
+        members: trip.members,
+        expenses: trip.expenses,
+        tripRates,
+      })
+    }
+    return calculateSettlementTransfers({
+      members: trip.members,
+      expenses: trip.expenses,
+    })
+  }, [displayMode, trip.members, trip.expenses, tripRates])
+
+  const hasAnyExpense = trip.expenses.length > 0
+  const hasAnySettlement = byCurrency.some((group) => group.items.length > 0)
+
   return (
     <div className="tab-panel">
+      <Select
+        label="顯示方式"
+        value={displayMode}
+        onChange={(e) => setDisplayMode(e.target.value as DisplayMode)}
+        options={DISPLAY_MODE_OPTIONS}
+      />
+
       {!hasAnyExpense ? (
         <div className="empty-state">
           <p className="empty-icon">🧾</p>
@@ -38,7 +68,7 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload }: Settl
       ) : (
         <div className="settlement-list">
           {byCurrency
-            .filter((g) => g.items.length > 0)
+            .filter((group) => group.items.length > 0)
             .map((group) => (
               <div key={group.currency} className="settlement-currency">
                 <div className="settlement-currency-title">{group.currency}</div>
@@ -78,6 +108,10 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload }: Settl
               </div>
             ))}
         </div>
+      )}
+
+      {displayMode === 'twd_estimate' && hasAnyExpense && (
+        <p className="overview-footnote">台幣金額依記帳當下匯率估算，實際刷卡金額可能略有差異。</p>
       )}
 
       <ExpenseUpsertModal

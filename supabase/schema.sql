@@ -19,6 +19,11 @@ create table if not exists travel_trips (
   deleted_at timestamptz,
   edit_permission text not null default 'owner_only'
     check (edit_permission in ('owner_only', 'all_members')),
+  base_currency text not null default 'TWD',
+  jpy_to_twd_rate numeric not null default 0.215,
+  usd_to_twd_rate numeric not null default 32,
+  exchange_rate_source text not null default 'fallback',
+  exchange_rate_fetched_at timestamptz,
   created_at timestamptz not null default now()
 );
 
@@ -55,6 +60,7 @@ create table if not exists travel_expenses (
   category text,
   note text,
   participant_member_ids uuid[] not null default '{}',
+  exchange_rate_to_twd numeric not null default 1,
   created_at timestamptz not null default now()
 );
 

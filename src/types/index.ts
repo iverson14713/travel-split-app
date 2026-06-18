@@ -4,6 +4,8 @@ export type ExpenseType = 'expense' | 'transfer'
 
 export type TripStatus = 'active' | 'archived'
 
+export type ExchangeRateSource = 'api' | 'fallback'
+
 export interface Member {
   id: string
   nickname: string
@@ -25,6 +27,7 @@ export interface Expense {
   type: ExpenseType
   amount: number
   currency: string
+  exchangeRateToTwd: number
   payerId: string
   receiverId?: string
   participantIds: string[]
@@ -44,6 +47,11 @@ export interface Trip {
   lastActivityAt: string
   archivedAt?: string
   editPermission: EditPermission
+  baseCurrency: string
+  jpyToTwdRate: number
+  usdToTwdRate: number
+  exchangeRateSource: ExchangeRateSource
+  exchangeRateFetchedAt?: string
   members: Member[]
   itinerary: ItineraryItem[]
   expenses: Expense[]

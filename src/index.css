@@ -1188,6 +1188,31 @@ textarea {
   padding-bottom: 0.5rem;
 }
 
+.expense-rate-hint {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+  margin-top: -0.25rem;
+}
+
+.expense-rate-hint p + p {
+  margin-top: 0.15rem;
+}
+
+.exchange-rate-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.exchange-rate-label,
+.exchange-rate-suffix {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;

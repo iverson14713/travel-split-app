@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ExpenseType, Trip } from '../../types'
 import { addExpense } from '../../services/tripService'
+import {
+  formatAmount,
+  getExchangeRateForCurrency,
+  toTwdAmount,
+} from '../../utils/settlement'
+import { formatJpyPer100Twd, formatUsdToTwd } from '../../services/exchangeRateService'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
 import { Input } from '../ui/Input'
@@ -11,8 +17,6 @@ const CURRENCIES = [
   { value: 'TWD', label: 'TWD 新台幣' },
   { value: 'JPY', label: 'JPY 日圓' },
   { value: 'USD', label: 'USD 美元' },
-  { value: 'EUR', label: 'EUR 歐元' },
-  { value: 'KRW', label: 'KRW 韓元' },
 ]
 
 const CATEGORIES = [
@@ -75,6 +79,35 @@ export function ExpenseUpsertModal({
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
 
+  const exchangeRateToTwd = useMemo(
+    () => getExchangeRateForCurrency(currency, trip),
+    [currency, trip],
+  )
+
+  const twdEstimateHint = useMemo(() => {
+    const parsedAmount = parseFloat(amount)
+    if (!parsedAmount || parsedAmount <= 0) return null
+
+    const c = currency.toUpperCase()
+    if (c === 'TWD') return null
+
+    const twdAmount = toTwdAmount(parsedAmount, exchangeRateToTwd)
+    if (c === 'JPY') {
+      const jpyPer100 = formatJpyPer100Twd(exchangeRateToTwd)
+      return {
+        amountLine: `約 TWD ${formatAmount(twdAmount, 'TWD')}`,
+        rateLine: `以 100 JPY = TWD ${jpyPer100} 估算`,
+      }
+    }
+    if (c === 'USD') {
+      return {
+        amountLine: `約 TWD ${formatAmount(twdAmount, 'TWD')}`,
+        rateLine: `以 1 USD = TWD ${formatUsdToTwd(exchangeRateToTwd)} 估算`,
+      }
+    }
+    return null
+  }, [amount, currency, exchangeRateToTwd])
+
   useEffect(() => {
     if (!open) return
 
@@ -119,6 +152,7 @@ export function ExpenseUpsertModal({
         receiverMemberId: type === 'transfer' ? receiverId : undefined,
         amount: parsedAmount,
         currency,
+        exchangeRateToTwd: getExchangeRateForCurrency(currency, trip),
         category: type === 'transfer' ? '還款' : category,
         note: note.trim(),
         participantMemberIds: type === 'transfer' ? [] : participantIds,
@@ -161,6 +195,13 @@ export function ExpenseUpsertModal({
           onChange={(e) => setCurrency(e.target.value)}
           options={CURRENCIES}
         />
+
+        {twdEstimateHint && (
+          <div className="expense-rate-hint">
+            <p>{twdEstimateHint.amountLine}</p>
+            <p>{twdEstimateHint.rateLine}</p>
+          </div>
+        )}
 
         <Select
           label="付款人"
@@ -220,4 +261,3 @@ export function ExpenseUpsertModal({
     </Modal>
   )
 }
-
