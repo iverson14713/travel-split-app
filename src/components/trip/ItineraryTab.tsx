@@ -22,8 +22,11 @@ function getDefaultExpandedDay(days: ReturnType<typeof getTripDays>, itinerary: 
   return firstWithItems?.day ?? 1
 }
 
-/** IntersectionObserver rootMargin must use px or % only (no rem/vh/calc). */
-const DAY_OBSERVER_ROOT_MARGIN = '-112px 0px -60% 0px'
+/** px tolerance below day strip when deciding which day section is active */
+const SCROLL_ANCHOR_BUFFER = 16
+
+/** Fallback duration if scrollend does not fire after programmatic scroll */
+const PROGRAMMATIC_SCROLL_MS = 900
 
 export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
@@ -42,7 +45,55 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
 
   const dayRefs = useRef<Map<number, HTMLElement>>(new Map())
   const chipRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
+  const dayStripRef = useRef<HTMLDivElement>(null)
+  const isProgrammaticScrollingRef = useRef(false)
+  const programmaticScrollTimerRef = useRef<number | null>(null)
   const scrollAfterAddRef = useRef<number | null>(null)
+
+  const getScrollAnchorY = useCallback(() => {
+    const stripBottom = dayStripRef.current?.getBoundingClientRect().bottom
+    return stripBottom ?? 112
+  }, [])
+
+  const updateActiveDayFromScroll = useCallback(() => {
+    if (isProgrammaticScrollingRef.current) return
+
+    const anchorY = getScrollAnchorY()
+    let nextActive = days[0]?.day ?? 1
+
+    for (const day of days) {
+      const el = dayRefs.current.get(day.day)
+      if (!el) continue
+      const top = el.getBoundingClientRect().top
+      if (top <= anchorY + SCROLL_ANCHOR_BUFFER) {
+        nextActive = day.day
+      }
+    }
+
+    setActiveDay((prev) => {
+      if (prev === nextActive) return prev
+      chipRefs.current.get(nextActive)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+      return nextActive
+    })
+  }, [days, getScrollAnchorY])
+
+  const endProgrammaticScroll = useCallback(() => {
+    if (!isProgrammaticScrollingRef.current) return
+    isProgrammaticScrollingRef.current = false
+    if (programmaticScrollTimerRef.current !== null) {
+      window.clearTimeout(programmaticScrollTimerRef.current)
+      programmaticScrollTimerRef.current = null
+    }
+    updateActiveDayFromScroll()
+  }, [updateActiveDayFromScroll])
+
+  const startProgrammaticScroll = useCallback(() => {
+    isProgrammaticScrollingRef.current = true
+    if (programmaticScrollTimerRef.current !== null) {
+      window.clearTimeout(programmaticScrollTimerRef.current)
+    }
+    programmaticScrollTimerRef.current = window.setTimeout(endProgrammaticScroll, PROGRAMMATIC_SCROLL_MS)
+  }, [endProgrammaticScroll])
 
   const itemsByDay = useMemo(() => {
     const map = new Map<number, Trip['itinerary']>()
@@ -63,37 +114,18 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   }, [])
 
   useEffect(() => {
-    let observer: IntersectionObserver | null = null
+    window.addEventListener('scroll', updateActiveDayFromScroll, { passive: true })
+    window.addEventListener('scrollend', endProgrammaticScroll)
+    updateActiveDayFromScroll()
 
-    try {
-      observer = new IntersectionObserver(
-        (entries) => {
-          const visible = entries
-            .filter((entry) => entry.isIntersecting)
-            .sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)
-
-          if (visible.length === 0) return
-
-          const day = Number(visible[0].target.getAttribute('data-day'))
-          if (!Number.isNaN(day)) {
-            setActiveDay(day)
-            chipRefs.current.get(day)?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
-          }
-        },
-        { rootMargin: DAY_OBSERVER_ROOT_MARGIN, threshold: 0 },
-      )
-
-      for (const day of days) {
-        const el = dayRefs.current.get(day.day)
-        if (el) observer.observe(el)
+    return () => {
+      window.removeEventListener('scroll', updateActiveDayFromScroll)
+      window.removeEventListener('scrollend', endProgrammaticScroll)
+      if (programmaticScrollTimerRef.current !== null) {
+        window.clearTimeout(programmaticScrollTimerRef.current)
       }
-    } catch {
-      setActiveDay(getDefaultExpandedDay(days, trip.itinerary))
-      return
     }
-
-    return () => observer?.disconnect()
-  }, [days, expandedDays, trip.itinerary])
+  }, [updateActiveDayFromScroll, endProgrammaticScroll, expandedDays])
 
   useEffect(() => {
     if (scrollAfterAddRef.current === null) return
@@ -101,9 +133,10 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
     scrollAfterAddRef.current = null
     setExpandedDays((prev) => new Set(prev).add(day))
     setActiveDay(day)
+    startProgrammaticScroll()
     const timer = setTimeout(() => scrollToDay(day), 150)
     return () => clearTimeout(timer)
-  }, [trip.itinerary, scrollToDay])
+  }, [trip.itinerary, scrollToDay, startProgrammaticScroll])
 
   const resetForm = () => {
     setTime('')
@@ -131,6 +164,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   const handleChipClick = (day: number) => {
     setActiveDay(day)
     setExpandedDays((prev) => new Set(prev).add(day))
+    startProgrammaticScroll()
     scrollToDay(day)
   }
 
@@ -169,7 +203,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
         </div>
       )}
 
-      <div className="day-strip" role="tablist" aria-label="快速切換日期">
+      <div className="day-strip" ref={dayStripRef} role="tablist" aria-label="快速切換日期">
         {days.map((day) => {
           const count = itemsByDay.get(day.day)?.length ?? 0
           const isActive = activeDay === day.day
