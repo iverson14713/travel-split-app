@@ -253,6 +253,63 @@ export function calculateMyTotalCostInTwd(
   return roundAmount(total, TWD)
 }
 
+export function calculateTripTotalExpenseInTwd(
+  expenses: Expense[],
+  tripRates?: TripRates,
+): number {
+  let total = 0
+
+  for (const exp of expenses) {
+    if (exp.type !== 'expense') continue
+    const amount = Number(exp.amount)
+    if (!Number.isFinite(amount)) continue
+    const rate = resolveExchangeRateToTwd(exp, tripRates)
+    total += toTwdAmount(amount, rate)
+  }
+
+  return roundAmount(total, TWD)
+}
+
+export function countExpenseItems(expenses: Expense[]): number {
+  return expenses.filter((exp) => exp.type === 'expense').length
+}
+
+export function calculateMemberSharesInTwd(
+  expenses: Expense[],
+  members: Member[],
+  tripRates?: TripRates,
+): { memberId: string; nickname: string; total: number }[] {
+  return members
+    .map((member) => ({
+      memberId: member.id,
+      nickname: member.nickname,
+      total: calculateMyTotalCostInTwd(expenses, member.id, tripRates),
+    }))
+    .sort((a, b) => b.total - a.total)
+}
+
+export function calculateCategoryTotalsInTwd(
+  expenses: Expense[],
+  tripRates?: TripRates,
+): { category: string; total: number }[] {
+  const totals: Record<string, number> = {}
+
+  for (const exp of expenses) {
+    if (exp.type !== 'expense') continue
+    const amount = Number(exp.amount)
+    if (!Number.isFinite(amount)) continue
+
+    const category = exp.category?.trim() || '其他'
+    const rate = resolveExchangeRateToTwd(exp, tripRates)
+    totals[category] = (totals[category] ?? 0) + toTwdAmount(amount, rate)
+  }
+
+  return Object.entries(totals)
+    .map(([category, total]) => ({ category, total: roundAmount(total, TWD) }))
+    .filter(({ total }) => !isZero(total, TWD))
+    .sort((a, b) => b.total - a.total)
+}
+
 function minTransfersFromBalances(
   balances: Record<string, number>,
   currency: string,

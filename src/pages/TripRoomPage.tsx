@@ -174,7 +174,11 @@ export function TripRoomPage() {
             />
           )}
           {activeTab === 'overview' && (
-            <OverviewTab trip={trip} currentMemberId={currentMember?.id} />
+            <OverviewTab
+              trip={trip}
+              currentMemberId={currentMember?.id}
+              onGoToSettlement={() => setActiveTab('settlement')}
+            />
           )}
           {activeTab === 'settlement' && (
             <SettlementTab

@@ -1234,25 +1234,63 @@ textarea {
 /* Settings */
 /* Overview */
 .tab-panel--overview {
-  gap: 1rem;
+  gap: 0.75rem;
 }
 
 .overview-section-title {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   font-weight: 600;
   color: var(--color-text-muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.15rem;
 }
 
-.overview-card {
+.overview-block-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 0.35rem;
+}
+
+.overview-block {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
+.overview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding: 0.85rem 1rem;
+}
+
+.overview-card--compact {
+  padding: 0.75rem 1rem;
+}
+
+.overview-card--list {
+  padding: 0.65rem 0.85rem;
+}
+
 .overview-card--balance {
   background: linear-gradient(135deg, var(--color-primary-light) 0%, #fff8f0 100%);
   border-color: rgba(224, 122, 79, 0.25);
+}
+
+.overview-card--action {
+  gap: 0.35rem;
+}
+
+.overview-balance-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-primary-dark);
+}
+
+.overview-card-action {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.35rem;
 }
 
 .overview-card-label {
@@ -1265,6 +1303,11 @@ textarea {
   font-weight: 700;
   line-height: 1.2;
   letter-spacing: -0.02em;
+}
+
+.overview-card-value--amount {
+  font-size: 1.35rem;
+  color: var(--color-primary-dark);
 }
 
 .overview-card-value--positive {
@@ -1286,9 +1329,86 @@ textarea {
 }
 
 .overview-card-hint {
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   color: var(--color-text-muted);
-  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+.overview-member-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.overview-member-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.overview-member-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.overview-member-name {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text);
+}
+
+.overview-member-amount {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  white-space: nowrap;
+}
+
+.overview-progress-track {
+  height: 0.35rem;
+  background: var(--color-primary-light);
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.overview-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-primary) 0%, var(--color-primary-dark) 100%);
+  border-radius: 999px;
+  min-width: 0;
+  transition: width 0.2s ease;
+}
+
+.overview-category-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.overview-category-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: calc(50% - 0.25rem);
+  flex: 1 1 calc(50% - 0.25rem);
+  padding: 0.55rem 0.7rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+
+.overview-category-name {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+.overview-category-amount {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
 }
 
 .overview-amount-list {
