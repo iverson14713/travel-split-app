@@ -6,6 +6,7 @@ import { getSession } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getShareLink } from '../utils/tripCode'
 import { Button } from '../components/ui/Button'
+import { Toast } from '../components/ui/Toast'
 import { ItineraryTab } from '../components/trip/ItineraryTab'
 import { ExpensesTab } from '../components/trip/ExpensesTab'
 import { SettlementTab } from '../components/trip/SettlementTab'
@@ -46,10 +47,7 @@ export function TripRoomPage() {
     const joined = (location.state as { joined?: boolean } | null)?.joined === true
     if (!joined) return
     setShowJoinedToast(true)
-    const t = setTimeout(() => setShowJoinedToast(false), 3500)
-    // clear state so refresh/back doesn't re-toast
     navigate(location.pathname, { replace: true, state: null })
-    return () => clearTimeout(t)
   }, [location.state, location.pathname, navigate])
 
   const handleCopyLink = async () => {
@@ -98,12 +96,13 @@ export function TripRoomPage() {
 
   return (
     <Layout>
+      <Toast
+        open={showJoinedToast}
+        message="加入成功，已進入旅程"
+        duration={2500}
+        onClose={() => setShowJoinedToast(false)}
+      />
       <div className="trip-room">
-        {showJoinedToast && (
-          <div className="toast toast--success">
-            加入成功！之後從 LINE 公告點進來會直接進入旅程。
-          </div>
-        )}
         <header className="trip-header">
           <div className="trip-header-info">
             <div className="trip-title-row">

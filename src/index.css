@@ -496,17 +496,41 @@ textarea {
   min-height: calc(100dvh - 0px);
 }
 
+.toast-host {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  left: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+
 .toast {
-  position: sticky;
-  top: 0.75rem;
-  margin: 0.75rem 1rem 0;
+  width: 100%;
+  max-width: calc(var(--max-width) - 32px);
   padding: 0.75rem 1rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   border: 1px solid var(--color-border);
   background: var(--color-surface);
-  box-shadow: 0 6px 20px var(--color-shadow);
-  z-index: 20;
+  box-shadow: 0 8px 24px var(--color-shadow);
   font-size: 0.9rem;
+  font-weight: 500;
+  text-align: center;
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.toast--show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.toast--hide {
+  opacity: 0;
+  transform: translateY(-8px);
 }
 
 .toast--success {
