@@ -23,7 +23,7 @@ const CATEGORIES = [
 
 const EXPENSE_TYPE_OPTIONS: { value: ExpenseType; label: string; hint: string }[] = [
   { value: 'expense', label: '消費支出', hint: '一般吃飯、交通、購物，會列入分帳' },
-  { value: 'transfer', label: '共同預付', hint: '先放一筆共用金，之後可以從共同金扣款' },
+  { value: 'transfer', label: '還款/轉帳', hint: '記錄成員之間互相還錢，不會再分攤' },
 ]
 
 export interface ExpenseUpsertModalPreset {
@@ -132,7 +132,7 @@ export function ExpenseUpsertModal({
     } else {
       if (!receiverId) return
       if (receiverId === payerId) {
-        setError('付款人與收款人不能相同')
+        setError('轉出人與轉入人不能相同')
         return
       }
     }
@@ -220,7 +220,7 @@ export function ExpenseUpsertModal({
         )}
 
         <Select
-          label="付款人"
+          label={type === 'transfer' ? '轉出人' : '付款人'}
           value={payerId}
           onChange={(e) => setPayerId(e.target.value)}
           options={memberOptions}
@@ -253,7 +253,7 @@ export function ExpenseUpsertModal({
           </>
         ) : (
           <Select
-            label="收款人"
+            label="轉入人"
             value={receiverId}
             onChange={(e) => setReceiverId(e.target.value)}
             options={memberOptions}
