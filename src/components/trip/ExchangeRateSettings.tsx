@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import type { Trip } from '../../types'
+import type { ReloadOptions } from '../../hooks/useTrip'
 import {
   formatDisplayRateValue,
   getRateUnitLabel,
@@ -16,7 +17,7 @@ import { Input } from '../ui/Input'
 interface ExchangeRateSettingsProps {
   trip: Trip
   tripId: string
-  onReload: () => Promise<void>
+  onReload: (options?: ReloadOptions) => Promise<void>
 }
 
 function buildDisplayValues(rates: Record<string, number>): Record<string, string> {
@@ -25,6 +26,11 @@ function buildDisplayValues(rates: Record<string, number>): Record<string, strin
     values[code] = formatDisplayRateValue(code, rates[code] ?? 0)
   }
   return values
+}
+
+function stopClick(event: MouseEvent) {
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function RateInputRow({
@@ -64,7 +70,8 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
     setDisplayValues(buildDisplayValues(trip.exchangeRatesToTwd))
   }, [trip.exchangeRatesToTwd])
 
-  const handleSaveRates = async () => {
+  const handleSaveRates = async (event: MouseEvent<HTMLButtonElement>) => {
+    stopClick(event)
     setRateError('')
     setRateNotice('')
 
@@ -84,7 +91,7 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
     try {
       await updateExchangeRates(tripId, { exchangeRatesToTwd })
       setRateNotice('匯率已儲存。已建立的舊支出不會自動改變。')
-      await onReload()
+      await onReload({ silent: true })
     } catch (err) {
       setRateError(err instanceof Error ? err.message : '更新匯率失敗')
     } finally {
@@ -92,25 +99,33 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
     }
   }
 
-  const handleRefreshRates = async () => {
+  const handleRefreshRates = async (event: MouseEvent<HTMLButtonElement>) => {
+    stopClick(event)
+    if (refreshingRates || savingRates) return
+
     setRateError('')
     setRateNotice('')
     setRefreshingRates(true)
+
     try {
       const rates = await fetchLatestExchangeRatesToTwd()
+      setDisplayValues(buildDisplayValues(rates.ratesToTwd))
+
       await updateExchangeRates(tripId, {
         exchangeRatesToTwd: rates.ratesToTwd,
         exchangeRateSource: rates.source,
         exchangeRateFetchedAt: rates.fetchedAt,
       })
+
       if (rates.source === 'fallback') {
-        setRateNotice(`${FALLBACK_RATE_NOTICE}。已建立的舊支出不會自動改變。`)
+        setRateNotice(`已更新目前匯率（${FALLBACK_RATE_NOTICE}）`)
       } else {
-        setRateNotice('已更新估算匯率。已建立的舊支出不會自動改變。')
+        setRateNotice('已更新目前匯率')
       }
-      await onReload()
-    } catch (err) {
-      setRateError(err instanceof Error ? err.message : '重新抓取匯率失敗')
+
+      await onReload({ silent: true })
+    } catch {
+      setRateError('抓取匯率失敗，請稍後再試')
     } finally {
       setRefreshingRates(false)
     }
@@ -142,7 +157,10 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
           type="button"
           className="exchange-rate-toggle"
           aria-expanded={showOther}
-          onClick={() => setShowOther((v) => !v)}
+          onClick={(event) => {
+            stopClick(event)
+            setShowOther((v) => !v)
+          }}
         >
           <span>其他幣別</span>
           <span className="exchange-rate-toggle-arrow" aria-hidden="true">
@@ -165,11 +183,22 @@ export function ExchangeRateSettings({ trip, tripId, onReload }: ExchangeRateSet
       </div>
 
       {rateError && <p className="form-error-msg">{rateError}</p>}
-      {rateNotice && <p className="settings-hint">{rateNotice}</p>}
-      <Button fullWidth onClick={handleSaveRates} disabled={savingRates || refreshingRates}>
+      {rateNotice && <p className="settings-hint settings-notice">{rateNotice}</p>}
+      <Button
+        type="button"
+        fullWidth
+        onClick={handleSaveRates}
+        disabled={savingRates || refreshingRates}
+      >
         {savingRates ? '儲存中...' : '儲存匯率'}
       </Button>
-      <Button fullWidth variant="outline" onClick={handleRefreshRates} disabled={savingRates || refreshingRates}>
+      <Button
+        type="button"
+        fullWidth
+        variant="outline"
+        onClick={handleRefreshRates}
+        disabled={savingRates || refreshingRates}
+      >
         {refreshingRates ? '抓取中...' : '重新抓取目前匯率'}
       </Button>
     </Card>

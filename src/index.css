@@ -1406,6 +1406,10 @@ textarea {
   white-space: nowrap;
 }
 
+.settings-notice {
+  color: var(--color-secondary-dark);
+}
+
 .settings-section {
   display: flex;
   flex-direction: column;

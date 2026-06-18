@@ -12,11 +12,13 @@ export function Button({
   size = 'md',
   fullWidth = false,
   className = '',
+  type = 'button',
   children,
   ...props
 }: ButtonProps) {
   return (
     <button
+      type={type}
       className={`btn btn--${variant} btn--${size} ${fullWidth ? 'btn--full' : ''} ${className}`}
       {...props}
     >

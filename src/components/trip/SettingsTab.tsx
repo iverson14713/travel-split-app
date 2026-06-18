@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { EditPermission, Trip } from '../../types'
+import type { ReloadOptions } from '../../hooks/useTrip'
 import { archiveTrip, restoreTrip, softDeleteTrip, updateEditPermission, updateMemberName } from '../../services/tripService'
 import { ExchangeRateSettings } from './ExchangeRateSettings'
 import { getShareLink } from '../../utils/tripCode'
@@ -14,7 +15,7 @@ interface SettingsPanelProps {
   tripId: string
   isHost: boolean
   currentMemberId?: string
-  onReload: () => Promise<void>
+  onReload: (options?: ReloadOptions) => Promise<void>
 }
 
 export function SettingsPanel({ trip, tripId, isHost, currentMemberId, onReload }: SettingsPanelProps) {

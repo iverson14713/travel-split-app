@@ -3,12 +3,18 @@ import type { Trip } from '../types'
 import { isSupabaseConfigured } from '../lib/supabase'
 import { fetchTripByCode } from '../services/tripService'
 
+export interface ReloadOptions {
+  silent?: boolean
+}
+
 export function useTrip(code: string | undefined) {
   const [trip, setTripState] = useState<Trip | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (options?: ReloadOptions) => {
+    const silent = options?.silent === true
+
     if (!code) {
       setTripState(null)
       setLoading(false)
@@ -22,17 +28,23 @@ export function useTrip(code: string | undefined) {
       return
     }
 
-    setLoading(true)
-    setError(null)
+    if (!silent) {
+      setLoading(true)
+      setError(null)
+    }
 
     try {
       const data = await fetchTripByCode(code)
       setTripState(data)
     } catch (err) {
-      setTripState(null)
-      setError(err instanceof Error ? err.message : '載入旅行資料失敗')
+      if (!silent) {
+        setTripState(null)
+        setError(err instanceof Error ? err.message : '載入旅行資料失敗')
+      }
     } finally {
-      setLoading(false)
+      if (!silent) {
+        setLoading(false)
+      }
     }
   }, [code])
 
