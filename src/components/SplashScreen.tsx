@@ -1,4 +1,4 @@
-import { APP_NAME, APP_NAME_EN, APP_TAGLINE } from '../constants/app'
+import { APP_NAME, APP_TAGLINE } from '../constants/app'
 
 export function SplashScreen() {
   return (
@@ -10,7 +10,6 @@ export function SplashScreen() {
           <span className="splash-icon-symbol splash-icon-symbol--tertiary">👥</span>
         </div>
         <h1 className="splash-title">{APP_NAME}</h1>
-        <p className="splash-subtitle">{APP_NAME_EN}</p>
         <p className="splash-tagline">{APP_TAGLINE}</p>
       </div>
     </div>

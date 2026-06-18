@@ -4,6 +4,7 @@ import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { useAppUI } from '../context/AppUIContext'
+import { APP_NAME, APP_TAGLINE } from '../constants/app'
 import { getRecentTrips, setSession } from '../utils/storage'
 import type { RecentTrip } from '../types'
 
@@ -59,8 +60,8 @@ export function HomePage() {
           <div className="home-icon" aria-hidden="true">
             ✈️
           </div>
-          <h1 className="home-title">旅伴小本本</h1>
-          <p className="home-subtitle">朋友旅行，一起看行程、一起記帳、結束一鍵分帳</p>
+          <h1 className="home-title">{APP_NAME}</h1>
+          <p className="home-subtitle">{APP_TAGLINE}</p>
         </div>
 
         <section className="home-section">

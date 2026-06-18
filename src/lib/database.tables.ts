@@ -1,4 +1,4 @@
-/** Supabase table names for 旅伴小本本 (prefixed to avoid conflicts in shared projects) */
+/** Supabase table names for 旅分帳 (prefixed to avoid conflicts in shared projects) */
 export const DB_TABLES = {
   trips: 'travel_trips',
   members: 'travel_members',

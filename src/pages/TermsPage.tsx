@@ -1,10 +1,11 @@
 import { LegalDocumentLayout } from '../components/legal/LegalDocumentLayout'
-import { APP_NAME, CONTACT_EMAIL } from '../constants/app'
+import { APP_DESCRIPTION, APP_NAME, CONTACT_EMAIL } from '../constants/app'
 
 export function TermsPage() {
   return (
-    <LegalDocumentLayout title="服務條款">
+    <LegalDocumentLayout title={`${APP_NAME} 服務條款`}>
       <p>
+        {APP_DESCRIPTION}
         歡迎使用 {APP_NAME}（以下稱「本 App」）。請在使用前詳閱以下服務條款。使用本 App
         即表示您同意遵守本條款。
       </p>

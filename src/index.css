@@ -2169,14 +2169,6 @@ textarea {
   letter-spacing: 0.02em;
 }
 
-.splash-subtitle {
-  margin-top: 0.25rem;
-  font-size: 0.9rem;
-  color: var(--color-text-muted);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .splash-tagline {
   margin-top: 1rem;
   font-size: 1rem;

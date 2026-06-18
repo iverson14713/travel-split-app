@@ -1,4 +1,4 @@
--- 旅伴小本本 Supabase Schema
+-- 旅分帳 Supabase Schema
 -- 貼到 Supabase SQL Editor 執行
 
 -- ============================================================

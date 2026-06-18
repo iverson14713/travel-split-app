@@ -1,10 +1,11 @@
 import { LegalDocumentLayout } from '../components/legal/LegalDocumentLayout'
-import { APP_NAME, CONTACT_EMAIL } from '../constants/app'
+import { APP_DESCRIPTION, APP_NAME, CONTACT_EMAIL } from '../constants/app'
 
 export function PrivacyPage() {
   return (
-    <LegalDocumentLayout title="隱私權政策">
+    <LegalDocumentLayout title={`${APP_NAME} 隱私權政策`}>
       <p>
+        {APP_DESCRIPTION}
         歡迎使用 {APP_NAME}（以下稱「本 App」）。本隱私權政策說明我們如何處理您在使用本 App
         時所提供的資訊。使用本 App 即表示您同意本政策內容。
       </p>
