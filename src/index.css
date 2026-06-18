@@ -746,6 +746,55 @@ textarea {
   line-height: 1.4;
 }
 
+.trip-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+}
+
+.trip-meta-sep {
+  opacity: 0.85;
+}
+
+.trip-meta-members {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.15rem;
+  margin: -0.2rem -0.35rem;
+  padding: 0.2rem 0.35rem;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+}
+
+.trip-meta-members:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.trip-meta-members:active {
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.trip-members-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.trip-members-modal-hint {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  line-height: 1.45;
+  padding: 0.65rem 0.75rem;
+  background: var(--color-bg-warm);
+  border-radius: var(--radius-md);
+}
+
 .trip-header-archived {
   margin-top: 0.65rem;
 }

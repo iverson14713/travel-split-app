@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { EditPermission, Member, Trip } from '../../types'
+import type { EditPermission, Trip } from '../../types'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import {
   archiveTrip,
-  removeMember,
   restoreTrip,
   softDeleteTrip,
   updateEditPermission,
   updateMemberName,
 } from '../../services/tripService'
 import { getActiveMembers } from '../../utils/members'
+import { useRemoveMember } from '../../hooks/useRemoveMember'
 import { useTripUnlock } from '../../hooks/useTripUnlock'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 import { FREE_LIMITS } from '../../constants/freeLimits'
@@ -17,6 +17,8 @@ import { ExchangeRateSettings } from './ExchangeRateSettings'
 import { ArchivedTripBanner } from './ArchivedTripBanner'
 import { FreeUsageHint } from './FreeUsageHint'
 import { MemberLimitBanner } from './MemberLimitBanner'
+import { ActiveMemberList } from './ActiveMemberList'
+import { RemoveMemberConfirmModal } from './RemoveMemberConfirmModal'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { updateRecentTripStatus } from '../../utils/storage'
@@ -53,12 +55,21 @@ export function SettingsPanel({
   const [nameError, setNameError] = useState('')
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [memberToRemove, setMemberToRemove] = useState<Member | null>(null)
-  const [removingMember, setRemovingMember] = useState(false)
-  const [removeError, setRemoveError] = useState('')
   const shareLink = getShareLink(trip.code)
   const { usage } = useTripUnlock(trip)
   const activeMembers = useMemo(() => getActiveMembers(trip.members), [trip.members])
+  const {
+    memberToRemove,
+    removingMember,
+    removeError,
+    requestRemove,
+    cancelRemove,
+    confirmRemove,
+  } = useRemoveMember({
+    tripId,
+    onReload,
+    onRemoved: (member) => onStatusMessage?.(`已移除 ${member.nickname}`),
+  })
   const showMemberFullBanner =
     usage != null &&
     !usage.isUnlimited &&
@@ -139,22 +150,6 @@ export function SettingsPanel({
       onStatusMessage?.('已取消封存，旅行恢復為進行中')
     } finally {
       setManagingTrip(false)
-    }
-  }
-
-  const handleConfirmRemoveMember = async () => {
-    if (!memberToRemove) return
-    setRemoveError('')
-    setRemovingMember(true)
-    try {
-      await removeMember(memberToRemove.id, tripId)
-      await onReload({ silent: true })
-      setMemberToRemove(null)
-      onStatusMessage?.(`已移除 ${memberToRemove.nickname}`)
-    } catch (err) {
-      setRemoveError(err instanceof Error ? err.message : '移除成員失敗')
-    } finally {
-      setRemovingMember(false)
     }
   }
 
@@ -287,30 +282,11 @@ export function SettingsPanel({
 
       <section className="settings-section">
         <h3 className="settings-title">成員列表（{activeMembers.length}）</h3>
-        <div className="member-list">
-          {activeMembers.map((m) => (
-            <div key={m.id} className="member-item">
-              <div className="member-item-main">
-                <span className="member-name">{m.nickname}</span>
-                {m.isHost && <span className="member-badge">主揪</span>}
-              </div>
-              {isHost && !m.isHost && !isArchived && (
-                <Button
-                  size="sm"
-                  variant="outline"
-                  type="button"
-                  className="member-remove-btn"
-                  onClick={() => {
-                    setRemoveError('')
-                    setMemberToRemove(m)
-                  }}
-                >
-                  移除
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
+        <ActiveMemberList
+          members={activeMembers}
+          showRemove={isHost && !isArchived}
+          onRemove={requestRemove}
+        />
       </section>
 
       <section className="settings-section">
@@ -351,45 +327,14 @@ export function SettingsPanel({
         </Card>
       </section>
 
-      <Modal
+      <RemoveMemberConfirmModal
+        member={memberToRemove}
         open={memberToRemove != null}
-        onClose={() => {
-          if (removingMember) return
-          setMemberToRemove(null)
-          setRemoveError('')
-        }}
-        title="移除成員？"
-      >
-        <div className="form">
-          <p className="settings-hint">
-            移除後，該成員將無法再以這個身分進入旅程。
-            <br />
-            既有行程與記帳紀錄會保留，不會刪除歷史資料。
-          </p>
-          {removeError && <p className="form-error-msg">{removeError}</p>}
-          <Button
-            fullWidth
-            variant="secondary"
-            type="button"
-            onClick={handleConfirmRemoveMember}
-            disabled={removingMember}
-          >
-            {removingMember ? '移除中...' : '移除成員'}
-          </Button>
-          <Button
-            fullWidth
-            variant="outline"
-            type="button"
-            onClick={() => {
-              setMemberToRemove(null)
-              setRemoveError('')
-            }}
-            disabled={removingMember}
-          >
-            取消
-          </Button>
-        </div>
-      </Modal>
+        removing={removingMember}
+        error={removeError}
+        onClose={cancelRemove}
+        onConfirm={confirmRemove}
+      />
 
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="刪除旅行？">
         <div className="form">

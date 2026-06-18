@@ -18,6 +18,7 @@ import { SettlementTab } from '../components/trip/SettlementTab'
 import { SettingsPanel } from '../components/trip/SettingsTab'
 import { ArchivedTripBanner } from '../components/trip/ArchivedTripBanner'
 import { UpgradeModal } from '../components/trip/UpgradeModal'
+import { TripMembersModal } from '../components/trip/TripMembersModal'
 import { DeveloperModeModal } from '../components/trip/DeveloperModeModal'
 import type { UpgradeReason } from '../services/tripUnlockService'
 
@@ -42,6 +43,7 @@ export function TripRoomPage() {
   const [showSettings, setShowSettings] = useState(false)
   const [titleTapCount, setTitleTapCount] = useState(0)
   const [showDeveloperModal, setShowDeveloperModal] = useState(false)
+  const [showMembersModal, setShowMembersModal] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
 
   const { refresh: refreshUnlock } = useTripUnlock(trip)
@@ -161,6 +163,8 @@ export function TripRoomPage() {
     (trip.editPermission === 'all_members' || currentMember?.isHost === true)
 
   const isArchived = trip.status === 'archived'
+  const activeMemberCount = getActiveMemberCount(trip.members)
+  const isHost = currentMember?.isHost === true
 
   return (
     <Layout>
@@ -202,7 +206,18 @@ export function TripRoomPage() {
           </div>
           <p className="trip-destination">📍 {trip.destination}</p>
           <p className="trip-meta">
-            {formatDateRange(trip.startDate, trip.endDate)}・👥 {getActiveMemberCount(trip.members)} 位成員
+            <span>{formatDateRange(trip.startDate, trip.endDate)}</span>
+            <span className="trip-meta-sep" aria-hidden="true">
+              ・
+            </span>
+            <button
+              type="button"
+              className="trip-meta-members"
+              onClick={() => setShowMembersModal(true)}
+              aria-label={`查看 ${activeMemberCount} 位旅程成員`}
+            >
+              👥 {activeMemberCount} 位成員 ›
+            </button>
           </p>
           {isArchived && (
             <div className="trip-header-archived">
@@ -275,6 +290,16 @@ export function TripRoomPage() {
           onTripDeleted={() => navigate('/')}
         />
       </Modal>
+
+      <TripMembersModal
+        open={showMembersModal}
+        onClose={() => setShowMembersModal(false)}
+        trip={trip}
+        tripId={trip.id}
+        isHost={isHost}
+        onReload={reload}
+        onStatusMessage={setStatusToast}
+      />
 
       <UpgradeModal
         open={upgradeReason != null}
