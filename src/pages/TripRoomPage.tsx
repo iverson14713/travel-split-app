@@ -9,9 +9,9 @@ import { formatDateRange } from '../utils/dates'
 import { getActiveMemberCount, isActiveMember } from '../utils/members'
 import { getShareLink } from '../utils/tripCode'
 import {
-  getTripLifecyclePhase,
-  isTripUpcoming,
+  getTripDisplayStatus,
   TRIP_ENDED_VIEW_HINT,
+  TRIP_SETTLING_VIEW_HINT,
 } from '../utils/tripLifecycle'
 import { isFreeTripRetentionExpired } from '../utils/tripRetention'
 import { isTripUnlocked } from '../services/tripUnlockService'
@@ -213,10 +213,12 @@ export function TripRoomPage() {
     trip.status !== 'archived' &&
     (trip.editPermission === 'all_members' || currentMember?.isHost === true)
 
-  const tripPhase = getTripLifecyclePhase(trip)
+  const tripStatus = getTripDisplayStatus(trip)
   const isArchived = trip.status === 'archived'
-  const isEnded = tripPhase === 'ended'
-  const isUpcoming = isTripUpcoming(trip)
+  const isActive = tripStatus === 'active'
+  const isSettling = tripStatus === 'settling'
+  const isEnded = tripStatus === 'ended'
+  const isUpcoming = tripStatus === 'upcoming'
   const activeMemberCount = getActiveMemberCount(trip.members)
   const isHost = currentMember?.isHost === true
 
@@ -242,6 +244,8 @@ export function TripRoomPage() {
                 {trip.name}
               </h1>
               {trip.status === 'archived' && <span className="trip-badge">已封存</span>}
+              {isActive && <span className="trip-badge trip-badge--active">進行中</span>}
+              {isSettling && <span className="trip-badge trip-badge--settling">待整理</span>}
               {isEnded && <span className="trip-badge trip-badge--ended">已結束</span>}
               {isUpcoming && <span className="trip-badge trip-badge--upcoming">即將開始</span>}
             </div>
@@ -278,6 +282,12 @@ export function TripRoomPage() {
           {isArchived && (
             <div className="trip-header-archived">
               <ArchivedTripBanner compact />
+            </div>
+          )}
+          {isSettling && (
+            <div className="archived-hint archived-hint--compact">
+              <span>📌</span>
+              <p>{TRIP_SETTLING_VIEW_HINT}</p>
             </div>
           )}
           {isEnded && (

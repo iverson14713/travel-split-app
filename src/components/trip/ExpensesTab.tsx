@@ -5,15 +5,18 @@ import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { ExpenseDetailModal } from './ExpenseDetailModal'
 import { ExpenseUpsertModal } from './ExpenseUpsertModal'
-import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
 import { TripEndedModal } from './TripEndedModal'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 import {
-  canEditTripContent,
-  getTripLifecyclePhase,
+  canEditExpense,
+  getExpenseEditBlockedReason,
+  getTripDisplayStatus,
+  TRIP_ARCHIVED_VIEW_HINT,
   TRIP_ENDED_VIEW_HINT,
+  TRIP_SETTLING_VIEW_HINT,
+  type TripEditBlockReason,
 } from '../../utils/tripLifecycle'
 
 interface ExpensesTabProps {
@@ -89,16 +92,23 @@ export function ExpensesTab({
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
-  const [showEndedModal, setShowEndedModal] = useState(false)
+  const [showBlockedModal, setShowBlockedModal] = useState(false)
+  const [blockedReason, setBlockedReason] = useState<TripEditBlockReason>('ended')
 
   const sortedExpenses = [...trip.expenses].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 
+  const showEditBlocked = (reason: TripEditBlockReason) => {
+    onEditBlocked?.()
+    setBlockedReason(reason)
+    setShowBlockedModal(true)
+  }
+
   const handleEdit = (expense: Expense) => {
-    if (!canEditTripContent(trip)) {
-      onEditBlocked?.()
-      setShowEndedModal(true)
+    const blocked = getExpenseEditBlockedReason(trip)
+    if (blocked) {
+      showEditBlocked(blocked)
       return
     }
     setSelectedExpense(null)
@@ -106,24 +116,32 @@ export function ExpensesTab({
   }
 
   const openAddModal = () => {
-    if (!canEditTripContent(trip)) {
-      onEditBlocked?.()
-      setShowEndedModal(true)
+    const blocked = getExpenseEditBlockedReason(trip)
+    if (blocked) {
+      showEditBlocked(blocked)
       return
     }
     setShowAddModal(true)
   }
 
+  const tripStatus = getTripDisplayStatus(trip)
   const isArchived = trip.status === 'archived'
-  const isEnded = getTripLifecyclePhase(trip) === 'ended'
-  const readOnly = isArchived || isEnded
+  const isSettling = tripStatus === 'settling'
+  const isEnded = tripStatus === 'ended'
+  const readOnly = !canEditExpense(trip)
 
   return (
     <div className="tab-panel">
       {isArchived && (
         <div className="archived-hint">
           <span>📌</span>
-          <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
+          <p>{TRIP_ARCHIVED_VIEW_HINT}</p>
+        </div>
+      )}
+      {isSettling && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>{TRIP_SETTLING_VIEW_HINT}</p>
         </div>
       )}
       {isEnded && (
@@ -193,7 +211,12 @@ export function ExpensesTab({
         onUpgradeRequired={onUpgradeRequired}
       />
 
-      <TripEndedModal open={showEndedModal} onClose={() => setShowEndedModal(false)} />
+      <TripEndedModal
+        open={showBlockedModal}
+        onClose={() => setShowBlockedModal(false)}
+        reason={blockedReason}
+        context="expense"
+      />
     </div>
   )
 }

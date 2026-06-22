@@ -16,7 +16,7 @@ interface ItineraryDetailModalProps {
   item: ItineraryItem | null
   trip: Trip
   tripId: string
-  readOnly?: boolean
+  editMode?: 'full' | 'notes' | 'none'
   onSaved: (dayIndex?: number) => Promise<void>
 }
 
@@ -35,7 +35,7 @@ export function ItineraryDetailModal({
   item,
   trip,
   tripId,
-  readOnly = false,
+  editMode = 'none',
   onSaved,
 }: ItineraryDetailModalProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
@@ -76,21 +76,24 @@ export function ItineraryDetailModal({
     onClose()
   }
 
+  const canEdit = editMode !== 'none'
+  const notesOnly = editMode === 'notes'
+
   const handleSave = async () => {
-    if (!title.trim()) return
+    if (!notesOnly && !title.trim()) return
 
     setSaving(true)
     setError('')
     try {
       await updateItineraryItem(item.id, {
         tripId,
-        dayIndex: selectedDay,
-        time,
-        title: title.trim(),
-        location: location.trim(),
+        dayIndex: notesOnly ? item.day : selectedDay,
+        time: notesOnly ? item.time : time,
+        title: notesOnly ? item.title : title.trim(),
+        location: notesOnly ? item.location : location.trim(),
         note: note.trim(),
       })
-      await onSaved(selectedDay)
+      await onSaved(notesOnly ? item.day : selectedDay)
       handleClose()
     } catch {
       setError('操作失敗，請稍後再試')
@@ -114,29 +117,39 @@ export function ItineraryDetailModal({
     }
   }
 
-  if (mode === 'edit' && !readOnly) {
+  if (mode === 'edit' && canEdit) {
     return (
-      <Modal open={open} onClose={handleClose} title="編輯行程">
+      <Modal open={open} onClose={handleClose} title={notesOnly ? '編輯備註' : '編輯行程'}>
         <div className="form">
-          <Select
-            label="日期"
-            value={String(selectedDay)}
-            onChange={(e) => setSelectedDay(Number(e.target.value))}
-            options={days.map((d) => ({ value: String(d.day), label: d.label }))}
-          />
-          <Input label="時間" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
-          <Input
-            label="標題"
-            placeholder="例：清水寺參觀"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-          />
-          <Input
-            label="地點"
-            placeholder="例：清水寺"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-          />
+          {!notesOnly && (
+            <>
+              <Select
+                label="日期"
+                value={String(selectedDay)}
+                onChange={(e) => setSelectedDay(Number(e.target.value))}
+                options={days.map((d) => ({ value: String(d.day), label: d.label }))}
+              />
+              <Input label="時間" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+              <Input
+                label="標題"
+                placeholder="例：清水寺參觀"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              <Input
+                label="地點"
+                placeholder="例：清水寺"
+                value={location}
+                onChange={(e) => setLocation(e.target.value)}
+              />
+            </>
+          )}
+          {notesOnly && (
+            <>
+              <DetailRow label="標題" value={item.title} />
+              <DetailRow label="所屬日期" value={dayLabel} />
+            </>
+          )}
           <Textarea
             label="備註"
             placeholder="備註事項..."
@@ -148,7 +161,12 @@ export function ItineraryDetailModal({
           <Button fullWidth variant="outline" type="button" onClick={() => setMode('view')} disabled={saving}>
             取消
           </Button>
-          <Button fullWidth type="button" onClick={handleSave} disabled={saving || !title.trim()}>
+          <Button
+            fullWidth
+            type="button"
+            onClick={handleSave}
+            disabled={saving || (!notesOnly && !title.trim())}
+          >
             {saving ? '儲存中...' : '儲存'}
           </Button>
         </div>
@@ -166,25 +184,27 @@ export function ItineraryDetailModal({
           <DetailRow label="備註" value={item.note || '—'} />
           <DetailRow label="所屬日期" value={dayLabel} />
 
-          {readOnly && <p className="settings-hint">{ARCHIVED_VIEW_ONLY_HINT}</p>}
+          {editMode === 'none' && <p className="settings-hint">{ARCHIVED_VIEW_ONLY_HINT}</p>}
 
           <div className="itinerary-detail-actions">
-            {!readOnly && (
+            {canEdit && (
               <>
                 <Button variant="outline" fullWidth type="button" onClick={() => setMode('edit')}>
-                  編輯
+                  {notesOnly ? '編輯備註' : '編輯'}
                 </Button>
-                <Button
-                  variant="outline"
-                  fullWidth
-                  type="button"
-                  onClick={() => {
-                    setDeleteError('')
-                    setShowDeleteConfirm(true)
-                  }}
-                >
-                  刪除
-                </Button>
+                {editMode === 'full' && (
+                  <Button
+                    variant="outline"
+                    fullWidth
+                    type="button"
+                    onClick={() => {
+                      setDeleteError('')
+                      setShowDeleteConfirm(true)
+                    }}
+                  >
+                    刪除
+                  </Button>
+                )}
               </>
             )}
             <Button variant="outline" fullWidth type="button" onClick={handleClose}>

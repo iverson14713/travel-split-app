@@ -9,12 +9,13 @@ import { Button } from '../ui/Button'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
-import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
 import {
-  canRecordRepayment,
-  getTripLifecyclePhase,
+  canSettle,
+  getTripDisplayStatus,
+  TRIP_ARCHIVED_VIEW_HINT,
   TRIP_ENDED_VIEW_HINT,
+  TRIP_SETTLING_VIEW_HINT,
 } from '../../utils/tripLifecycle'
 
 interface SettlementTabProps {
@@ -42,16 +43,24 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
 
   const hasAnyExpense = trip.expenses.length > 0
   const hasAnySettlement = settlementItems.length > 0
+  const tripStatus = getTripDisplayStatus(trip)
   const isArchived = trip.status === 'archived'
-  const isEnded = getTripLifecyclePhase(trip) === 'ended'
-  const canRepay = canRecordRepayment(trip)
+  const isSettling = tripStatus === 'settling'
+  const isEnded = tripStatus === 'ended'
+  const canRepay = canSettle(trip)
 
   return (
     <div className="tab-panel">
       {isArchived && (
         <div className="archived-hint">
           <span>📌</span>
-          <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
+          <p>{TRIP_ARCHIVED_VIEW_HINT}</p>
+        </div>
+      )}
+      {isSettling && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>{TRIP_SETTLING_VIEW_HINT}</p>
         </div>
       )}
       {isEnded && (

@@ -1,31 +1,45 @@
 import type { TripStatus } from '../types'
+import { addDaysToDateString, normalizeDateString } from './dates'
+
+export const SETTLING_GRACE_DAYS = 7
 
 /** 首頁列表與旅程狀態顯示用 */
-export type HomeListPhase = 'active' | 'upcoming' | 'ended' | 'archived'
+export type HomeListPhase = 'active' | 'upcoming' | 'settling' | 'ended' | 'archived'
 
-/** 旅程房內編輯限制等仍用三態（不含即將開始） */
-export type TripLifecyclePhase = 'active' | 'ended' | 'archived'
+export type TripLifecyclePhase = HomeListPhase
+
+export type TripDisplayStatus = HomeListPhase
+
+export type TripEditBlockReason = 'ended' | 'archived'
+
+export type TripItineraryBlockReason = 'ended' | 'archived' | 'settling'
 
 export const TRIP_LIST_PHASE_LABELS: Record<HomeListPhase, string> = {
   active: '進行中',
   upcoming: '即將開始',
+  settling: '待整理',
   ended: '已結束',
   archived: '已封存',
 }
 
-export const TRIP_LIFECYCLE_LABELS: Record<TripLifecyclePhase, string> = {
-  active: '進行中',
-  ended: '已結束',
-  archived: '已封存',
-}
+export const TRIP_LIFECYCLE_LABELS: Record<TripLifecyclePhase, string> = TRIP_LIST_PHASE_LABELS
+
+export const TRIP_SETTLING_VIEW_HINT =
+  '旅程已結束，可在整理期間補記支出與完成結算。'
 
 export const TRIP_ENDED_VIEW_HINT =
-  '這趟旅程已結束，仍可查看行程、記帳與結算。如需新的旅行，請建立新的旅程。'
+  '這趟旅程已結束，資料仍可查看與結算，但不能再新增或編輯支出。'
+
+export const TRIP_ARCHIVED_VIEW_HINT = '這趟旅程已封存，僅供查看。'
 
 export type TripLifecycleInput = {
   status?: TripStatus
   startDate?: string
   endDate?: string
+}
+
+export type TripLifecycleOptions = {
+  today?: string
 }
 
 export function getTodayDateString(): string {
@@ -40,45 +54,171 @@ export function isTripArchived(trip: TripLifecycleInput): boolean {
   return trip.status === 'archived'
 }
 
-export function isTripUpcoming(trip: TripLifecycleInput): boolean {
-  if (isTripArchived(trip)) return false
-  if (!trip.startDate) return false
-  return getTodayDateString() < trip.startDate
+function getSettlingUntil(endDate: string): string {
+  return addDaysToDateString(endDate, SETTLING_GRACE_DAYS)
 }
 
-export function isTripEnded(trip: TripLifecycleInput): boolean {
-  if (isTripArchived(trip)) return false
-  if (!trip.endDate) return false
-  return getTodayDateString() > trip.endDate
-}
-
-/** 首頁四區塊分類 */
-export function getHomeListPhase(trip: TripLifecycleInput): HomeListPhase {
+export function getTripDisplayStatus(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): TripDisplayStatus {
   if (isTripArchived(trip)) return 'archived'
-  if (isTripUpcoming(trip)) return 'upcoming'
-  if (isTripEnded(trip)) return 'ended'
+
+  const today = normalizeDateString(options?.today ?? getTodayDateString())
+  const startDate = normalizeDateString(trip.startDate)
+  const endDate = normalizeDateString(trip.endDate)
+
+  if (startDate && today < startDate) return 'upcoming'
+  if (endDate && today > endDate) {
+    const settlingUntil = getSettlingUntil(endDate)
+    if (today <= settlingUntil) return 'settling'
+    return 'ended'
+  }
   return 'active'
 }
 
-/** 旅程房內：進行中 / 已結束 / 已封存（即將開始視同進行中以前，不可編輯內容） */
-export function getTripLifecyclePhase(trip: TripLifecycleInput): TripLifecyclePhase {
+export function isTripUpcoming(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return getTripDisplayStatus(trip, options) === 'upcoming'
+}
+
+/** 日曆上的旅程已結束（含整理期） */
+export function isTripPastEndDate(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  if (isTripArchived(trip)) return false
+  const today = normalizeDateString(options?.today ?? getTodayDateString())
+  const endDate = normalizeDateString(trip.endDate)
+  return Boolean(endDate && today > endDate)
+}
+
+/** 整理期也已過，完全鎖定編輯 */
+export function isTripEnded(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return getTripDisplayStatus(trip, options) === 'ended'
+}
+
+export function isTripSettling(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return getTripDisplayStatus(trip, options) === 'settling'
+}
+
+export function getHomeListPhase(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): HomeListPhase {
+  return getTripDisplayStatus(trip, options)
+}
+
+/** @deprecated 請改用 getTripDisplayStatus */
+export function getTripLifecyclePhase(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): TripLifecyclePhase {
+  return getTripDisplayStatus(trip, options)
+}
+
+export function canEditItinerary(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  const status = getTripDisplayStatus(trip, options)
+  return status === 'upcoming' || status === 'active'
+}
+
+export function canEditItineraryNotes(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return getTripDisplayStatus(trip, options) === 'settling'
+}
+
+export function canAddItinerary(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return canEditItinerary(trip, options)
+}
+
+export function canEditExpense(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  const status = getTripDisplayStatus(trip, options)
+  return status === 'upcoming' || status === 'active' || status === 'settling'
+}
+
+export function canSettle(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  const status = getTripDisplayStatus(trip, options)
+  return status === 'active' || status === 'settling' || status === 'ended'
+}
+
+/** @deprecated 請改用 canSettle */
+export function canRecordRepayment(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return canSettle(trip, options)
+}
+
+export function canModifyTripDates(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return canEditItinerary(trip, options)
+}
+
+/** @deprecated 請改用 canEditItinerary / canEditExpense */
+export function canEditTrip(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return canEditItinerary(trip, options)
+}
+
+/** @deprecated 請改用 canEditItinerary / canEditExpense */
+export function canEditTripContent(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): boolean {
+  return canEditItinerary(trip, options)
+}
+
+export function getExpenseEditBlockedReason(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): TripEditBlockReason | null {
   if (isTripArchived(trip)) return 'archived'
-  if (isTripEnded(trip)) return 'ended'
-  return 'active'
+  if (!canEditExpense(trip, options)) return 'ended'
+  return null
 }
 
-/** 進行中才可新增 / 編輯 / 刪除行程與支出 */
-export function canEditTripContent(trip: TripLifecycleInput): boolean {
-  return getTripLifecyclePhase(trip) === 'active' && !isTripUpcoming(trip)
+export function getItineraryAddBlockedReason(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): TripItineraryBlockReason | null {
+  if (isTripArchived(trip)) return 'archived'
+  const status = getTripDisplayStatus(trip, options)
+  if (status === 'ended') return 'ended'
+  if (status === 'settling') return 'settling'
+  if (!canAddItinerary(trip, options)) return 'ended'
+  return null
 }
 
-/** 進行中或已結束可記錄還款；已封存不可 */
-export function canRecordRepayment(trip: TripLifecycleInput): boolean {
-  const phase = getTripLifecyclePhase(trip)
-  return phase === 'active' || phase === 'ended'
-}
-
-/** 進行中才可修改旅程日期 */
-export function canModifyTripDates(trip: TripLifecycleInput): boolean {
-  return getTripLifecyclePhase(trip) === 'active' && !isTripUpcoming(trip)
+/** @deprecated 請改用 getExpenseEditBlockedReason 或 getItineraryAddBlockedReason */
+export function getTripEditBlockedReason(
+  trip: TripLifecycleInput,
+  options?: TripLifecycleOptions,
+): TripEditBlockReason | null {
+  return getExpenseEditBlockedReason(trip, options)
 }

@@ -300,6 +300,13 @@ export function HomePage() {
             />
 
             <TripSection
+              title="待整理"
+              trips={grouped.settling}
+              phase="settling"
+              onEnter={handleEnterTrip}
+            />
+
+            <TripSection
               title="已結束"
               trips={grouped.ended}
               phase="ended"

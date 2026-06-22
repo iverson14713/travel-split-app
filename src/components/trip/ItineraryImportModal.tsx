@@ -20,6 +20,15 @@ interface ItineraryImportModalProps {
 
 type Step = 'input' | 'preview'
 
+function comparePreviewItems(a: ParsedItineraryItem, b: ParsedItineraryItem): number {
+  const aEmpty = !a.time
+  const bEmpty = !b.time
+  if (aEmpty && !bEmpty) return 1
+  if (!aEmpty && bEmpty) return -1
+  if (!aEmpty && !bEmpty) return a.time.localeCompare(b.time)
+  return 0
+}
+
 function groupByDay(items: ParsedItineraryItem[]): Map<number, ParsedItineraryItem[]> {
   const map = new Map<number, ParsedItineraryItem[]>()
   for (const item of items) {
@@ -28,16 +37,25 @@ function groupByDay(items: ParsedItineraryItem[]): Map<number, ParsedItineraryIt
     map.set(item.dayIndex, list)
   }
   for (const [, list] of map) {
-    list.sort((a, b) => a.time.localeCompare(b.time))
+    list.sort(comparePreviewItems)
   }
   return map
 }
 
+function formatPreviewTime(time: string): string {
+  if (!time) return '未指定時間'
+  return time
+}
+
 function PreviewItem({ item }: { item: ParsedItineraryItem }) {
-  const meta = [item.location, item.note].filter(Boolean).join(' · ')
+  const metaParts = [item.location]
+  if (item.note && item.note !== '未指定時間') {
+    metaParts.push(item.note)
+  }
+  const meta = metaParts.filter(Boolean).join(' · ')
   return (
     <li className="itinerary-import-preview-item">
-      <span className="itinerary-import-preview-time">{item.time || '全天'}</span>
+      <span className="itinerary-import-preview-time">{formatPreviewTime(item.time)}</span>
       <span className="itinerary-import-preview-title">{item.title}</span>
       {meta && <span className="itinerary-import-preview-meta">{meta}</span>}
     </li>
@@ -90,7 +108,9 @@ export function ItineraryImportModal({
     }
 
     const result = parseItineraryText(trimmed, trip.startDate, trip.endDate)
-    if (result.items.length === 0 && result.outOfRangeItems.length === 0) {
+    const parsedCount = result.items.length + result.outOfRangeItems.length
+
+    if (parsedCount === 0) {
       setError('無法解析任何行程，請調整文字格式後再試')
       return
     }
@@ -128,6 +148,13 @@ export function ItineraryImportModal({
 
   const sortedPreviewDays = [...previewGroups.keys()].sort((a, b) => a - b)
   const sortedOutOfRangeDays = [...outOfRangeGroups.keys()].sort((a, b) => a - b)
+  const parsedDayCount = new Set([
+    ...parseResult?.items.map((item) => item.dayIndex) ?? [],
+    ...parseResult?.outOfRangeItems.map((item) => item.dayIndex) ?? [],
+  ]).size
+  const parsedItemCount =
+    (parseResult?.items.length ?? 0) + (parseResult?.outOfRangeItems.length ?? 0)
+  const unparsedCount = parseResult?.unparsedLines.length ?? 0
 
   return (
     <Modal open={open} onClose={handleClose} title="貼上行程匯入">
@@ -157,19 +184,50 @@ export function ItineraryImportModal({
         ) : (
           <>
             <div className="itinerary-import-preview">
+              {parseResult && (
+                <div className="itinerary-import-preview-summary">
+                  <span>成功解析 {parsedDayCount} 天</span>
+                  <span>成功解析 {parsedItemCount} 筆行程</span>
+                  {unparsedCount > 0 && <span>未匯入內容 {unparsedCount} 行</span>}
+                </div>
+              )}
+
               {sortedPreviewDays.length === 0 ? (
-                <p className="itinerary-import-preview-empty">沒有可匯入的行程（可能都超出旅程天數）</p>
+                <p className="itinerary-import-preview-empty">
+                  沒有可匯入的行程（可能都超出旅程天數）
+                </p>
               ) : (
-                sortedPreviewDays.map((day) => (
-                  <section key={day} className="itinerary-import-preview-day">
-                    <h4 className="itinerary-import-preview-day-title">Day {day}</h4>
-                    <ul className="itinerary-import-preview-list">
-                      {(previewGroups.get(day) ?? []).map((item, idx) => (
-                        <PreviewItem key={`${day}-${idx}`} item={item} />
-                      ))}
-                    </ul>
-                  </section>
-                ))
+                sortedPreviewDays.map((day) => {
+                  const dayItems = previewGroups.get(day) ?? []
+                  const notes = parseResult?.dayNotes.filter((n) => n.dayIndex === day) ?? []
+                  const headerExtra = parseResult?.dayHeaderExtras[day]
+                  const titleParts = [`Day ${day}`]
+                  if (headerExtra) titleParts.push(headerExtra)
+                  titleParts.push(`${dayItems.length} 筆行程`)
+
+                  return (
+                    <section key={day} className="itinerary-import-preview-day">
+                      <h4 className="itinerary-import-preview-day-title">
+                        {titleParts.join('｜')}
+                      </h4>
+                      {notes.length > 0 && (
+                        <div className="itinerary-import-day-notes">
+                          <p className="itinerary-import-day-notes-title">Day 備註</p>
+                          <ul className="itinerary-import-day-notes-list">
+                            {notes.map((note, idx) => (
+                              <li key={idx}>{note.text}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <ul className="itinerary-import-preview-list">
+                        {dayItems.map((item, idx) => (
+                          <PreviewItem key={`${day}-${idx}`} item={item} />
+                        ))}
+                      </ul>
+                    </section>
+                  )
+                })
               )}
 
               {sortedOutOfRangeDays.length > 0 && (
@@ -190,11 +248,17 @@ export function ItineraryImportModal({
 
               {parseResult && parseResult.unparsedLines.length > 0 && (
                 <section className="itinerary-import-unparsed">
-                  <h4 className="itinerary-import-unparsed-title">無法解析的內容</h4>
-                  <p className="itinerary-import-unparsed-hint">可手動修改文字後重新解析</p>
+                  <h4 className="itinerary-import-unparsed-title">
+                    未自動匯入的內容（{parseResult.unparsedLines.length} 行）
+                  </h4>
+                  <p className="itinerary-import-unparsed-hint">
+                    以下內容未自動匯入，可手動補充
+                  </p>
                   <ul className="itinerary-import-unparsed-list">
                     {parseResult.unparsedLines.map((line, idx) => (
-                      <li key={idx}>{line}</li>
+                      <li key={idx} className="itinerary-import-unparsed-line">
+                        {line}
+                      </li>
                     ))}
                   </ul>
                 </section>

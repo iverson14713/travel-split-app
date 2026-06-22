@@ -12,6 +12,7 @@ export type { HomeListPhase }
 export interface GroupedRecentTrips {
   active: RecentTrip[]
   upcoming: RecentTrip[]
+  settling: RecentTrip[]
   ended: RecentTrip[]
   archived: RecentTrip[]
   expired: RecentTrip[]
@@ -49,6 +50,7 @@ export function groupAndSortRecentTrips(trips: RecentTrip[]): GroupedRecentTrips
   const groups: GroupedRecentTrips = {
     active: [],
     upcoming: [],
+    settling: [],
     ended: [],
     archived: [],
     expired: [],
@@ -64,6 +66,7 @@ export function groupAndSortRecentTrips(trips: RecentTrip[]): GroupedRecentTrips
 
   groups.active = sortActiveTrips(groups.active)
   groups.upcoming = sortUpcomingTrips(groups.upcoming)
+  groups.settling = sortEndedTrips(groups.settling)
   groups.ended = sortEndedTrips(groups.ended)
   groups.archived = sortArchivedTrips(groups.archived)
 
@@ -71,5 +74,11 @@ export function groupAndSortRecentTrips(trips: RecentTrip[]): GroupedRecentTrips
 }
 
 export function countVisibleTrips(groups: GroupedRecentTrips): number {
-  return groups.active.length + groups.upcoming.length + groups.ended.length + groups.archived.length
+  return (
+    groups.active.length +
+    groups.upcoming.length +
+    groups.settling.length +
+    groups.ended.length +
+    groups.archived.length
+  )
 }

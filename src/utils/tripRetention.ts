@@ -1,6 +1,6 @@
 import { FREE_TRIP_RETENTION_DAYS } from '../constants/tripRetention'
-import { addDaysToDateString, formatDisplayDate } from './dates'
-import { getTodayDateString, isTripEnded } from './tripLifecycle'
+import { addDaysToDateString, formatDisplayDate, normalizeDateString } from './dates'
+import { getTodayDateString, isTripPastEndDate } from './tripLifecycle'
 import { isTripUnlocked } from '../services/tripUnlockService'
 
 export type TripRetentionInput = {
@@ -26,16 +26,18 @@ export function formatRetentionUntilLabel(endDate: string): string {
 export function isFreeTripRetentionExpired(trip: TripRetentionInput): boolean {
   if (resolveTripUnlocked(trip)) return false
   if (!trip.endDate) return false
-  if (!isTripEnded(trip)) return false
-  return getTodayDateString() > getFreeRetentionUntil(trip.endDate)
+  const endDate = normalizeDateString(trip.endDate)
+  if (!isTripPastEndDate({ ...trip, endDate })) return false
+  return getTodayDateString() > getFreeRetentionUntil(endDate)
 }
 
 /** 免費、已結束、尚在保留期內 */
 export function shouldShowFreeRetentionHint(trip: TripRetentionInput): boolean {
   if (resolveTripUnlocked(trip)) return false
   if (!trip.endDate) return false
-  if (!isTripEnded(trip)) return false
-  return !isFreeTripRetentionExpired(trip)
+  const endDate = normalizeDateString(trip.endDate)
+  if (!isTripPastEndDate({ ...trip, endDate })) return false
+  return !isFreeTripRetentionExpired({ ...trip, endDate })
 }
 
 export const UNLOCKED_LONG_TERM_LABEL = '已解鎖・長期保留'

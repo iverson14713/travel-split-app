@@ -33,8 +33,8 @@ import { updateRecentTripStatus } from '../../utils/storage'
 import { useAppUI } from '../../context/AppUIContext'
 import {
   canModifyTripDates,
-  getTripLifecyclePhase,
-  isTripEnded,
+  getTripDisplayStatus,
+  isTripPastEndDate,
 } from '../../utils/tripLifecycle'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
@@ -127,7 +127,7 @@ export function SettingsPanel({
       setDateError('結束日期不能早於開始日期')
       return
     }
-    if (isTripEnded(trip) && tripEndDate > trip.endDate) {
+    if (isTripPastEndDate(trip) && tripEndDate > trip.endDate) {
       setDateError('旅程已結束，無法將結束日期往後延長。請建立新的旅程。')
       return
     }
@@ -239,7 +239,7 @@ export function SettingsPanel({
   }
 
   const isArchived = trip.status === 'archived'
-  const isEnded = getTripLifecyclePhase(trip) === 'ended'
+  const isEnded = getTripDisplayStatus(trip) === 'ended'
   const datesEditable = canModifyTripDates(trip)
 
   return (
