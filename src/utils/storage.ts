@@ -1,7 +1,9 @@
 import type { RecentTrip, TripStatus, UserSession } from '../types'
 
 const SESSION_KEY = 'travel-split-session'
-const RECENT_TRIPS_KEY = 'travel-split-recent-trips'
+/** 本機近期旅程列表（等同 recent_trip_ids 用途） */
+export const RECENT_TRIPS_STORAGE_KEY = 'travel-split-recent-trips'
+const RECENT_TRIPS_KEY = RECENT_TRIPS_STORAGE_KEY
 const ONBOARDING_KEY = 'onboarding_seen'
 
 export function hasSeenOnboarding(): boolean {
@@ -54,6 +56,7 @@ export function recordRecentTrip(
   const existing = getRecentTrips().find((t) => t.tripCode === entry.tripCode.toUpperCase())
   const normalized: RecentTrip = {
     tripCode: entry.tripCode.toUpperCase(),
+    tripId: entry.tripId ?? existing?.tripId,
     tripName: entry.tripName,
     destination: entry.destination,
     memberId: entry.memberId,
@@ -63,11 +66,23 @@ export function recordRecentTrip(
     startDate: entry.startDate ?? existing?.startDate,
     endDate: entry.endDate ?? existing?.endDate,
     memberCount: entry.memberCount ?? existing?.memberCount,
+    unlocked: entry.unlocked ?? existing?.unlocked,
   }
 
   const others = getRecentTrips().filter((t) => t.tripCode !== normalized.tripCode)
   const updated = [normalized, ...others].slice(0, MAX_RECENT_TRIPS)
 
+  localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
+}
+
+export function updateRecentTripUnlocked(tripCode: string, unlocked: boolean): void {
+  const normalizedCode = tripCode.toUpperCase()
+  const trips = getRecentTrips()
+  if (!trips.some((t) => t.tripCode === normalizedCode)) return
+
+  const updated = trips.map((t) =>
+    t.tripCode === normalizedCode ? { ...t, unlocked } : t,
+  )
   localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
 }
 

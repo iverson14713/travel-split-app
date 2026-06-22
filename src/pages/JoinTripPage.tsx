@@ -6,7 +6,7 @@ import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { MemberJoinBlockedCard } from '../components/trip/MemberJoinBlockedCard'
 import { fetchTripByCode, joinTrip } from '../services/tripService'
-import { checkMemberLimit } from '../services/tripUnlockService'
+import { checkMemberLimit, isTripUnlocked } from '../services/tripUnlockService'
 import { getSession, hasSessionForTrip, setSession, recordRecentTrip } from '../utils/storage'
 import { getActiveMembers } from '../utils/members'
 import type { Member, Trip } from '../types'
@@ -100,9 +100,11 @@ export function JoinTripPage() {
       memberId,
       memberName,
       status: fetchedTrip?.status,
+      tripId: fetchedTrip?.id,
       startDate: fetchedTrip?.startDate,
       endDate: fetchedTrip?.endDate,
       memberCount: fetchedTrip ? getActiveMembers(fetchedTrip.members).length : undefined,
+      unlocked: fetchedTrip ? isTripUnlocked(fetchedTrip.id) : undefined,
     })
     navigate(`/trip/${trimmedCode}`, joined ? { state: { joined: true } } : undefined)
   }

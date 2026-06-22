@@ -71,6 +71,7 @@ export interface UserSession {
 
 export interface RecentTrip {
   tripCode: string
+  tripId?: string
   tripName: string
   destination: string
   memberId: string
@@ -80,6 +81,8 @@ export interface RecentTrip {
   startDate?: string
   endDate?: string
   memberCount?: number
+  /** 快取：是否已解鎖（以 tripId 即時判斷為準） */
+  unlocked?: boolean
 }
 
 export interface SettlementItem {

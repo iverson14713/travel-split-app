@@ -226,6 +226,40 @@ textarea {
   opacity: 0.98;
 }
 
+.home-trip-card--expired {
+  opacity: 0.82;
+}
+
+.home-trip-badge--unlocked {
+  background: #e8f0ff;
+  color: #2f5fd0;
+  border-color: #b8cff5;
+}
+
+.home-trip-badge--expired {
+  background: #f3f3f3;
+  color: #888;
+  border-color: #ddd;
+}
+
+.home-trip-retention {
+  font-size: 0.82rem;
+  color: var(--color-primary-dark);
+  margin-top: 0.15rem;
+  font-weight: 500;
+}
+
+.home-trip-retention-hint {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  margin-top: 0.1rem;
+  line-height: 1.4;
+}
+
+.home-trip-retention-hint--positive {
+  color: var(--color-primary-dark);
+}
+
 .home-section--collapsible {
   gap: 0.5rem;
 }

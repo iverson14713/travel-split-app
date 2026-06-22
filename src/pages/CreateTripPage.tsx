@@ -71,6 +71,7 @@ export function CreateTripPage() {
       setSession({ tripCode: trip.code, memberId })
       recordRecentTrip({
         tripCode: trip.code,
+        tripId: trip.id,
         tripName: trip.name,
         destination: trip.destination,
         memberId,
@@ -78,6 +79,7 @@ export function CreateTripPage() {
         startDate: trip.startDate,
         endDate: trip.endDate,
         memberCount: 1,
+        unlocked: unlockAfterCreate,
       })
       setCreatedRates(rates)
       setCreatedCode(trip.code)

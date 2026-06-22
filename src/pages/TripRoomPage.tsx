@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
 import { useTripUnlock } from '../hooks/useTripUnlock'
-import { getSession, recordRecentTrip } from '../utils/storage'
+import { getSession, recordRecentTrip, updateRecentTripUnlocked } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getActiveMemberCount, isActiveMember } from '../utils/members'
 import { getShareLink } from '../utils/tripCode'
@@ -11,6 +11,8 @@ import {
   getTripLifecyclePhase,
   TRIP_ENDED_VIEW_HINT,
 } from '../utils/tripLifecycle'
+import { isFreeTripRetentionExpired } from '../utils/tripRetention'
+import { isTripUnlocked } from '../services/tripUnlockService'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { SyncIndicator } from '../components/ui/SyncIndicator'
@@ -26,6 +28,7 @@ import { TripMembersModal } from '../components/trip/TripMembersModal'
 import { DeveloperModeModal } from '../components/trip/DeveloperModeModal'
 import { DeveloperVerifyModal } from '../components/trip/DeveloperVerifyModal'
 import { TripEndedModal } from '../components/trip/TripEndedModal'
+import { TripRetentionExpiredModal } from '../components/trip/TripRetentionExpiredModal'
 import type { UpgradeReason } from '../services/tripUnlockService'
 
 type Tab = 'itinerary' | 'expenses' | 'overview' | 'settlement'
@@ -69,6 +72,7 @@ export function TripRoomPage() {
     if (!trip || !currentMember) return
     recordRecentTrip({
       tripCode: trip.code,
+      tripId: trip.id,
       tripName: trip.name,
       destination: trip.destination,
       memberId: currentMember.id,
@@ -77,6 +81,7 @@ export function TripRoomPage() {
       startDate: trip.startDate,
       endDate: trip.endDate,
       memberCount: getActiveMemberCount(trip.members),
+      unlocked: isTripUnlocked(trip.id),
     })
   }, [trip, currentMember])
 
@@ -134,6 +139,9 @@ export function TripRoomPage() {
 
   const handleUnlockChanged = () => {
     refreshUnlock()
+    if (trip) {
+      updateRecentTripUnlocked(trip.code, isTripUnlocked(trip.id))
+    }
   }
 
   if (initialLoading && !trip) {
@@ -176,6 +184,23 @@ export function TripRoomPage() {
           <h2 className="page-title">找不到旅行房間</h2>
           <p className="page-desc">請確認連結或代碼是否正確</p>
         </div>
+      </Layout>
+    )
+  }
+
+  const retentionExpired = isFreeTripRetentionExpired({
+    tripId: trip.id,
+    endDate: trip.endDate,
+    unlocked: isTripUnlocked(trip.id),
+  })
+
+  if (hasValidSession && retentionExpired) {
+    return (
+      <Layout showBack backTo="/">
+        <TripRetentionExpiredModal
+          open
+          onClose={() => navigate('/')}
+        />
       </Layout>
     )
   }
@@ -321,6 +346,10 @@ export function TripRoomPage() {
           onUpgradeRequired={handleShowUpgrade}
           onStatusMessage={setStatusToast}
           onTripDeleted={() => navigate('/')}
+          onGoHome={() => {
+            setShowSettings(false)
+            navigate('/')
+          }}
         />
       </Modal>
 

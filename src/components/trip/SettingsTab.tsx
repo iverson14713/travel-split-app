@@ -50,6 +50,7 @@ interface SettingsPanelProps {
   onUpgradeRequired?: (reason: UpgradeReason) => void
   onStatusMessage?: (message: string) => void
   onTripDeleted?: () => void
+  onGoHome?: () => void
 }
 
 export function SettingsPanel({
@@ -61,6 +62,7 @@ export function SettingsPanel({
   onUpgradeRequired,
   onStatusMessage,
   onTripDeleted,
+  onGoHome,
 }: SettingsPanelProps) {
   const [copied, setCopied] = useState(false)
   const [lineCopied, setLineCopied] = useState(false)
@@ -242,6 +244,15 @@ export function SettingsPanel({
 
   return (
     <div className="settings-panel">
+      {onGoHome && (
+        <section className="settings-section settings-section--home">
+          <Button fullWidth variant="outline" type="button" onClick={onGoHome}>
+            回到首頁
+          </Button>
+          <p className="settings-hint">查看本裝置上的旅程列表</p>
+        </section>
+      )}
+
       {isArchived && (
         <section className="settings-section">
           <ArchivedTripBanner />
