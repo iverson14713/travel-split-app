@@ -26,6 +26,8 @@ create table if not exists travel_trips (
   exchange_rate_fetched_at timestamptz,
   exchange_rates_to_twd jsonb not null default '{}',
   estimated_member_count int,
+  owner_member_id uuid references travel_members(id) on delete set null,
+  created_by_device_id text,
   created_at timestamptz not null default now()
 );
 

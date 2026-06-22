@@ -28,6 +28,7 @@ import { RestoreTripUnlockButton } from './RestorePurchasesButton'
 import { TripTooLongModal } from './TripTooLongModal'
 import { TripUnlockWindowExceededModal } from './TripUnlockWindowExceededModal'
 import { getShareLink } from '../../utils/tripCode'
+import { updateTripNickname } from '../../utils/memberIdentity'
 import { getLineShareText } from '../../utils/shareText'
 import { updateRecentTripStatus } from '../../utils/storage'
 import { useAppUI } from '../../context/AppUIContext'
@@ -183,6 +184,7 @@ export function SettingsPanel({
     setSavingName(true)
     try {
       await updateMemberName(currentMemberId, trimmed)
+      updateTripNickname(tripId, trimmed)
       await onReload({ silent: true })
     } catch (err) {
       setNameError(err instanceof Error ? err.message : '更新暱稱失敗')

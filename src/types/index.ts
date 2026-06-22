@@ -58,6 +58,8 @@ export interface Trip {
   exchangeRateFetchedAt?: string
   exchangeRatesToTwd: Record<string, number>
   estimatedMemberCount?: number
+  ownerMemberId?: string
+  createdByDeviceId?: string
   members: Member[]
   itinerary: ItineraryItem[]
   expenses: Expense[]

@@ -4,7 +4,8 @@ import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
 import { useTripUnlock } from '../hooks/useTripUnlock'
 import { useSyncTripUnlockFromServer } from '../hooks/useSyncTripUnlockFromServer'
-import { getSession, recordRecentTrip, updateRecentTripUnlocked } from '../utils/storage'
+import { recordRecentTrip, setSession, updateRecentTripUnlocked } from '../utils/storage'
+import { getTripMemberId } from '../utils/memberIdentity'
 import { formatDateRange } from '../utils/dates'
 import { getActiveMemberCount, isActiveMember } from '../utils/members'
 import { getShareLink } from '../utils/tripCode'
@@ -64,15 +65,15 @@ export function TripRoomPage() {
   useSyncTripUnlockFromServer(trip?.id, refreshUnlock)
 
   const tripCode = code?.toUpperCase() ?? ''
-  const session = getSession()
-  const sessionMatchesTrip = session?.tripCode === tripCode
+  const memberId = trip ? getTripMemberId(trip.id) : null
   const currentMember = trip?.members.find(
-    (m) => m.id === session?.memberId && isActiveMember(m),
+    (member) => member.id === memberId && isActiveMember(member),
   )
-  const hasValidSession = sessionMatchesTrip && !!currentMember
+  const hasValidSession = !!currentMember
 
   useEffect(() => {
     if (!trip || !currentMember) return
+    setSession({ tripCode: trip.code, memberId: currentMember.id })
     recordRecentTrip({
       tripCode: trip.code,
       tripId: trip.id,

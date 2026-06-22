@@ -59,7 +59,7 @@ export function ExpenseUpsertModal({
     () => getSelectableMembers(trip.members, expense),
     [trip.members, expense],
   )
-  const defaultPayer = currentMemberId ?? activeMembers[0]?.id ?? selectableMembers[0]?.id ?? ''
+  const defaultPayer = currentMemberId ?? ''
 
   const memberOptions = useMemo(
     () =>

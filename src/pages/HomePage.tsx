@@ -7,6 +7,7 @@ import { useAppUI } from '../context/AppUIContext'
 import { APP_NAME, APP_TAGLINE } from '../constants/app'
 import { formatDateRange } from '../utils/dates'
 import { getRecentTrips, setSession, updateRecentTripUnlocked } from '../utils/storage'
+import { getTripMemberId } from '../utils/memberIdentity'
 import { TRIP_LIST_PHASE_LABELS, type HomeListPhase } from '../utils/tripLifecycle'
 import {
   countVisibleTrips,
@@ -218,7 +219,17 @@ export function HomePage() {
       setShowExpiredModal(true)
       return
     }
-    setSession({ tripCode: trip.tripCode, memberId: trip.memberId })
+
+    const memberId = trip.tripId
+      ? getTripMemberId(trip.tripId) ?? trip.memberId
+      : trip.memberId
+
+    if (!memberId) {
+      navigate(`/join?code=${trip.tripCode}`)
+      return
+    }
+
+    setSession({ tripCode: trip.tripCode, memberId })
     navigate(`/trip/${trip.tripCode}`)
   }
 

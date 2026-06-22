@@ -20,6 +20,12 @@
   --font: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, sans-serif;
   --max-width: 480px;
   --tab-nav-height: 4rem;
+  --app-safe-top: env(safe-area-inset-top, 0px);
+  --app-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-safe-left: env(safe-area-inset-left, 0px);
+  --app-safe-right: env(safe-area-inset-right, 0px);
+  --header-safe-padding-top: calc(var(--app-safe-top) + 16px);
+  --trip-header-bg: linear-gradient(135deg, var(--color-primary) 0%, #e8956a 100%);
 }
 
 *,
@@ -848,7 +854,7 @@ textarea {
 
 .toast-host {
   position: fixed;
-  top: calc(env(safe-area-inset-top, 0px) + 16px);
+  top: var(--header-safe-padding-top);
   left: 16px;
   right: 16px;
   z-index: 1000;
@@ -890,7 +896,7 @@ textarea {
 }
 
 .trip-header {
-  background: linear-gradient(135deg, var(--color-primary) 0%, #e8956a 100%);
+  background: var(--trip-header-bg);
   color: white;
   padding: 1.05rem 1.15rem 1.1rem;
   display: flex;
@@ -2919,6 +2925,76 @@ textarea {
 .home-about-sep {
   color: var(--color-border);
   font-size: 0.85rem;
+}
+
+/* iOS Safe Area (mobile) */
+@media (max-width: 519px) {
+  .layout-header {
+    padding-top: var(--header-safe-padding-top);
+    padding-left: max(1.25rem, calc(var(--app-safe-left) + 0.25rem));
+    padding-right: max(1.25rem, calc(var(--app-safe-right) + 0.25rem));
+  }
+
+  .layout:not(:has(.layout-header)) > .layout-main {
+    padding-top: var(--header-safe-padding-top);
+  }
+
+  .layout-header + .layout-main {
+    padding-top: 1.25rem;
+  }
+
+  .layout-main {
+    padding-left: max(1.25rem, calc(var(--app-safe-left) + 0.25rem));
+    padding-right: max(1.25rem, calc(var(--app-safe-right) + 0.25rem));
+    padding-bottom: max(1.25rem, calc(var(--app-safe-bottom) + 0.25rem));
+  }
+
+  .layout:not(:has(.layout-header)) > .layout-main:has(.trip-room),
+  .layout-main:has(.trip-room) {
+    padding: 0;
+  }
+
+  .trip-room::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--app-safe-top);
+    background: var(--trip-header-bg);
+    z-index: 8;
+    pointer-events: none;
+  }
+
+  .home {
+    padding-top: calc(1.5rem + 24px);
+  }
+
+  .trip-room {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--color-bg);
+  }
+
+  .trip-header {
+    position: relative;
+    z-index: 9;
+    padding-top: var(--header-safe-padding-top);
+    padding-left: max(1.15rem, calc(var(--app-safe-left) + 1.15rem));
+    padding-right: max(1.15rem, calc(var(--app-safe-right) + 1.15rem));
+  }
+
+  .legal-header {
+    padding-top: var(--header-safe-padding-top);
+    padding-left: max(1.25rem, calc(var(--app-safe-left) + 0.25rem));
+    padding-right: max(1.25rem, calc(var(--app-safe-right) + 0.25rem));
+  }
+
+  .legal-main {
+    padding-left: max(1.25rem, calc(var(--app-safe-left) + 0.25rem));
+    padding-right: max(1.25rem, calc(var(--app-safe-right) + 0.25rem));
+    padding-bottom: max(2rem, calc(var(--app-safe-bottom) + 1rem));
+  }
 }
 
 /* Desktop enhancements */

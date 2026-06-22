@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
@@ -7,8 +7,12 @@ import { Select } from '../components/ui/Select'
 import { MemberJoinBlockedCard } from '../components/trip/MemberJoinBlockedCard'
 import { fetchTripByCode, joinTrip } from '../services/tripService'
 import { checkMemberLimit, isTripUnlocked } from '../services/tripUnlockService'
-import { getSession, hasSessionForTrip, setSession, recordRecentTrip } from '../utils/storage'
-import { getActiveMembers } from '../utils/members'
+import {
+  getTripMemberId,
+  setTripMemberIdentity,
+} from '../utils/memberIdentity'
+import { getActiveMembers, getJoinClaimableMembers, isActiveMember } from '../utils/members'
+import { recordRecentTrip, setSession } from '../utils/storage'
 import type { Member, Trip } from '../types'
 
 export function JoinTripPage() {
@@ -22,23 +26,40 @@ export function JoinTripPage() {
   const [checkingTrip, setCheckingTrip] = useState(!!urlCode)
   const [tripFound, setTripFound] = useState<boolean | null>(null)
   const [tripName, setTripName] = useState('')
-  const [tripDestination, setTripDestination] = useState('')
   const [members, setMembers] = useState<Member[]>([])
+  const [joinableMembers, setJoinableMembers] = useState<Member[]>([])
   const [selectedMemberId, setSelectedMemberId] = useState('')
   const [duplicateMember, setDuplicateMember] = useState<Member | null>(null)
   const [fetchedTrip, setFetchedTrip] = useState<Trip | null>(null)
 
+  const saveAndEnterTrip = useCallback((
+    trip: Trip,
+    memberId: string,
+    memberName: string,
+    joined = false,
+  ) => {
+    const trimmedCode = trip.code.toUpperCase()
+    setTripMemberIdentity(trip.id, memberId, memberName)
+    setSession({ tripCode: trimmedCode, memberId })
+    recordRecentTrip({
+      tripCode: trimmedCode,
+      tripName: trip.name,
+      destination: trip.destination,
+      memberId,
+      memberName,
+      status: trip.status,
+      tripId: trip.id,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      memberCount: getActiveMembers(trip.members).length,
+      unlocked: isTripUnlocked(trip.id),
+    })
+    navigate(`/trip/${trimmedCode}`, joined ? { state: { joined: true } } : undefined)
+  }, [navigate])
+
   useEffect(() => {
     if (urlCode) setCode(urlCode)
   }, [urlCode])
-
-  useEffect(() => {
-    if (!urlCode) return
-    const session = getSession()
-    if (session?.tripCode === urlCode.toUpperCase() && session.memberId) {
-      navigate(`/trip/${urlCode}`, { replace: true })
-    }
-  }, [urlCode, navigate])
 
   useEffect(() => {
     const trimmedCode = code.trim().toUpperCase()
@@ -57,27 +78,37 @@ export function JoinTripPage() {
         if (!trip) {
           setTripFound(false)
           setTripName('')
-          setTripDestination('')
           setMembers([])
+          setJoinableMembers([])
           setSelectedMemberId('')
           setFetchedTrip(null)
+          return
+        }
+
+        const localMemberId = getTripMemberId(trip.id)
+        const localMember = localMemberId
+          ? trip.members.find((member) => member.id === localMemberId && isActiveMember(member))
+          : undefined
+
+        if (localMember) {
+          saveAndEnterTrip(trip, localMember.id, localMember.nickname)
           return
         }
 
         setTripFound(true)
         setFetchedTrip(trip)
         setTripName(trip.name)
-        setTripDestination(trip.destination)
         const activeMembers = getActiveMembers(trip.members)
         setMembers(activeMembers)
-        setSelectedMemberId(activeMembers[0]?.id ?? '')
+        setJoinableMembers(getJoinClaimableMembers(trip.members))
+        setSelectedMemberId('')
       })
       .catch(() => {
         if (cancelled) return
         setTripFound(false)
         setTripName('')
-        setTripDestination('')
         setMembers([])
+        setJoinableMembers([])
         setSelectedMemberId('')
         setFetchedTrip(null)
       })
@@ -88,26 +119,7 @@ export function JoinTripPage() {
     return () => {
       cancelled = true
     }
-  }, [code])
-
-  const saveAndEnterTrip = (memberId: string, memberName: string, joined = false) => {
-    const trimmedCode = code.trim().toUpperCase()
-    setSession({ tripCode: trimmedCode, memberId })
-    recordRecentTrip({
-      tripCode: trimmedCode,
-      tripName,
-      destination: tripDestination,
-      memberId,
-      memberName,
-      status: fetchedTrip?.status,
-      tripId: fetchedTrip?.id,
-      startDate: fetchedTrip?.startDate,
-      endDate: fetchedTrip?.endDate,
-      memberCount: fetchedTrip ? getActiveMembers(fetchedTrip.members).length : undefined,
-      unlocked: fetchedTrip ? isTripUnlocked(fetchedTrip.id) : undefined,
-    })
-    navigate(`/trip/${trimmedCode}`, joined ? { state: { joined: true } } : undefined)
-  }
+  }, [code, saveAndEnterTrip])
 
   const isMemberFull = fetchedTrip ? checkMemberLimit(fetchedTrip) != null : false
 
@@ -126,15 +138,27 @@ export function JoinTripPage() {
       return
     }
 
-    if (hasSessionForTrip(trimmedCode)) {
-      navigate(`/trip/${trimmedCode}`)
-      return
+    if (fetchedTrip) {
+      const localMemberId = getTripMemberId(fetchedTrip.id)
+      if (localMemberId) {
+        const localMember = fetchedTrip.members.find(
+          (member) => member.id === localMemberId && isActiveMember(member),
+        )
+        if (localMember) {
+          saveAndEnterTrip(fetchedTrip, localMember.id, localMember.nickname)
+          return
+        }
+      }
     }
 
     const existing = members.find(
-      (m) => m.nickname.trim().toLowerCase() === trimmedNickname.toLowerCase(),
+      (member) => member.nickname.trim().toLowerCase() === trimmedNickname.toLowerCase(),
     )
     if (existing) {
+      if (existing.isHost) {
+        setError('此暱稱已被主揪使用，請換一個名字加入。')
+        return
+      }
       setDuplicateMember(existing)
       return
     }
@@ -156,12 +180,24 @@ export function JoinTripPage() {
       }
 
       const member = await joinTrip(trip.id, trimmedNickname)
-      saveAndEnterTrip(member.id, member.nickname, true)
+      saveAndEnterTrip(trip, member.id, member.nickname, true)
     } catch (err) {
       setError(err instanceof Error ? err.message : '加入旅行失敗，請稍後再試')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const handleReclaimIdentity = () => {
+    if (!duplicateMember || !fetchedTrip || duplicateMember.isHost) return
+    saveAndEnterTrip(fetchedTrip, duplicateMember.id, duplicateMember.nickname)
+  }
+
+  const handleEnterWithSelectedIdentity = () => {
+    if (!selectedMemberId || !fetchedTrip) return
+    const member = joinableMembers.find((item) => item.id === selectedMemberId)
+    if (!member || member.isHost) return
+    saveAndEnterTrip(fetchedTrip, member.id, member.nickname)
   }
 
   const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0
@@ -178,7 +214,7 @@ export function JoinTripPage() {
               : '輸入朋友分享的旅行代碼和你的暱稱'}
         </p>
         <p className="page-tip">
-          第一次使用請輸入暱稱加入。之後從同一個 LINE 公告或同一個瀏覽器打開，會直接進入旅程。
+          每台裝置會記住你在這趟旅程的身分。第一次加入請輸入暱稱；之後從同一台裝置打開會自動進入。
         </p>
 
         {checkingTrip && <p className="loading-text">查詢旅行中...</p>}
@@ -221,13 +257,17 @@ export function JoinTripPage() {
 
                     {duplicateMember ? (
                       <div className="page-actions" style={{ marginTop: '0.25rem' }}>
-                        <Button
-                          fullWidth
-                          onClick={() => saveAndEnterTrip(duplicateMember.id, duplicateMember.nickname)}
-                        >
+                        <Button fullWidth onClick={handleReclaimIdentity}>
                           我是 {duplicateMember.nickname}，直接進入
                         </Button>
-                        <Button fullWidth variant="outline" onClick={() => { setDuplicateMember(null); setNickname('') }}>
+                        <Button
+                          fullWidth
+                          variant="outline"
+                          onClick={() => {
+                            setDuplicateMember(null)
+                            setNickname('')
+                          }}
+                        >
                           不是，我要換名字
                         </Button>
                       </div>
@@ -248,32 +288,35 @@ export function JoinTripPage() {
               </div>
             </section>
 
+            {joinableMembers.length > 0 && (
             <section className="card">
               <h3 className="tab-panel-title">已經加入過？</h3>
               <p className="settings-hint" style={{ marginTop: '0.25rem' }}>
-                若 LINE 內建瀏覽器狀態遺失，你可以在這裡選擇身分直接進入。
+                若這台裝置遺失了身分紀錄，可以從既有成員中選擇你的身分進入。主揪身分無法在此選擇。
               </p>
               <div className="form" style={{ marginTop: '0.75rem' }}>
                 <Select
                   label="選擇你的身分"
                   value={selectedMemberId}
                   onChange={(e) => setSelectedMemberId(e.target.value)}
-                  options={members.map((m) => ({ value: m.id, label: m.nickname + (m.isHost ? '（主揪）' : '') }))}
+                  options={[
+                    { value: '', label: '請選擇你的身分' },
+                    ...joinableMembers.map((member) => ({
+                      value: member.id,
+                      label: member.nickname,
+                    })),
+                  ]}
                 />
                 <Button
                   fullWidth
-                  onClick={() => {
-                    if (!selectedMemberId) return
-                    const member = members.find((m) => m.id === selectedMemberId)
-                    if (!member) return
-                    saveAndEnterTrip(member.id, member.nickname)
-                  }}
+                  onClick={handleEnterWithSelectedIdentity}
                   disabled={!selectedMemberId}
                 >
                   用這個身分進入
                 </Button>
               </div>
             </section>
+            )}
           </>
         )}
       </div>

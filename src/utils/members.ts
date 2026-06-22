@@ -1,11 +1,21 @@
-import type { Expense, Member } from '../types'
+import type { Expense, Member, Trip } from '../types'
 
 export function isActiveMember(member: Member): boolean {
   return member.status !== 'removed'
 }
 
+export function isTripOwner(member: Member, trip: Pick<Trip, 'ownerMemberId' | 'members'>): boolean {
+  if (trip.ownerMemberId) return member.id === trip.ownerMemberId
+  return member.isHost
+}
+
 export function getActiveMembers(members: Member[]): Member[] {
   return members.filter(isActiveMember)
+}
+
+/** Join-page identity recovery: active members except the trip owner. */
+export function getJoinClaimableMembers(members: Member[]): Member[] {
+  return getActiveMembers(members).filter((member) => !member.isHost)
 }
 
 export function getActiveMemberCount(members: Member[]): number {

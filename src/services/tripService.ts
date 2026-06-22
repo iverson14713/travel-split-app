@@ -2,6 +2,8 @@ import { requireSupabase } from '../lib/supabase'
 import { DB_TABLES } from '../lib/database.tables'
 import type { EditPermission, ExchangeRateSource, Expense, ExpenseType, ItineraryItem, Member, MemberStatus, Trip, TripStatus } from '../types'
 import { generateTripCode } from '../utils/tripCode'
+import { getDeviceId } from '../utils/memberIdentity'
+import { computeOwnerRepair } from '../utils/tripOwnerRepair'
 import { FALLBACK_RATES_TO_TWD, getRateFromTripMap } from './exchangeRateService'
 
 interface TripRow {
@@ -23,6 +25,8 @@ interface TripRow {
   exchange_rate_fetched_at: string | null
   exchange_rates_to_twd: Record<string, number> | null
   estimated_member_count: number | null
+  owner_member_id: string | null
+  created_by_device_id: string | null
   created_at: string
 }
 
@@ -63,14 +67,18 @@ interface ExpenseRow {
   created_at: string
 }
 
-function mapMember(row: MemberRow): Member {
+function mapMember(row: MemberRow, ownerMemberId?: string | null): Member {
   const status: MemberStatus =
     row.status === 'removed' || row.removed_at != null ? 'removed' : 'active'
+
+  const isHost = ownerMemberId
+    ? row.id === ownerMemberId
+    : row.role === 'owner'
 
   return {
     id: row.id,
     nickname: row.name,
-    isHost: row.role === 'owner',
+    isHost,
     joinedAt: row.created_at,
     status,
     removedAt: row.removed_at ?? undefined,
@@ -159,7 +167,9 @@ function mapTrip(
     exchangeRateFetchedAt: row.exchange_rate_fetched_at ?? undefined,
     exchangeRatesToTwd,
     estimatedMemberCount: row.estimated_member_count ?? undefined,
-    members: members.map(mapMember),
+    ownerMemberId: row.owner_member_id ?? undefined,
+    createdByDeviceId: row.created_by_device_id ?? undefined,
+    members: members.map((member) => mapMember(member, row.owner_member_id)),
     itinerary: itinerary.map(mapItinerary),
     expenses: expenses.map((expenseRow) => mapExpense(expenseRow, exchangeRatesToTwd)),
     createdAt: row.created_at,
@@ -186,6 +196,43 @@ async function reviveTripIfArchived(tripId: string): Promise<void> {
   if (error) throw error
 }
 
+async function repairTripOwnerIfNeeded(
+  tripId: string,
+  tripRow: TripRow,
+  memberRows: MemberRow[],
+): Promise<{ tripRow: TripRow; memberRows: MemberRow[] }> {
+  const repair = computeOwnerRepair(tripRow.owner_member_id, memberRows)
+  if (!repair.needsUpdate || !repair.ownerMemberId) {
+    return { tripRow, memberRows }
+  }
+
+  const db = requireSupabase()
+
+  if (repair.ownerMemberIdChanged) {
+    const { error } = await db
+      .from(DB_TABLES.trips)
+      .update({ owner_member_id: repair.ownerMemberId })
+      .eq('id', tripId)
+    if (error) throw error
+    tripRow = { ...tripRow, owner_member_id: repair.ownerMemberId }
+  }
+
+  for (const update of repair.roleUpdates) {
+    const { error } = await db
+      .from(DB_TABLES.members)
+      .update({ role: update.role })
+      .eq('id', update.id)
+    if (error) throw error
+  }
+
+  const updatedMembers = memberRows.map((row) => {
+    const roleUpdate = repair.roleUpdates.find((update) => update.id === row.id)
+    return roleUpdate ? { ...row, role: roleUpdate.role } : row
+  })
+
+  return { tripRow, memberRows: updatedMembers }
+}
+
 export async function fetchTripByCode(code: string): Promise<Trip | null> {
   const db = requireSupabase()
   const normalizedCode = code.trim().toUpperCase()
@@ -210,7 +257,18 @@ export async function fetchTripByCode(code: string): Promise<Trip | null> {
   if (itineraryResult.error) throw itineraryResult.error
   if (expensesResult.error) throw expensesResult.error
 
-  return mapTrip(tripRow, membersResult.data, itineraryResult.data, expensesResult.data)
+  const repaired = await repairTripOwnerIfNeeded(
+    tripRow.id,
+    tripRow as TripRow,
+    membersResult.data as MemberRow[],
+  )
+
+  return mapTrip(
+    repaired.tripRow,
+    repaired.memberRows,
+    itineraryResult.data,
+    expensesResult.data,
+  )
 }
 
 export async function tripCodeExists(code: string): Promise<boolean> {
@@ -299,7 +357,24 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
 
   if (memberError) throw memberError
 
-  const trip = mapTrip(tripRow, [memberRow], [], [])
+  const deviceId = getDeviceId()
+  const { error: ownerError } = await db
+    .from(DB_TABLES.trips)
+    .update({
+      owner_member_id: memberRow.id,
+      created_by_device_id: deviceId,
+    })
+    .eq('id', tripRow.id)
+
+  if (ownerError) throw ownerError
+
+  const tripRowWithOwner: TripRow = {
+    ...tripRow,
+    owner_member_id: memberRow.id,
+    created_by_device_id: deviceId,
+  }
+
+  const trip = mapTrip(tripRowWithOwner, [memberRow], [], [])
   return { trip, memberId: memberRow.id }
 }
 
@@ -318,7 +393,7 @@ export async function joinTrip(tripId: string, nickname: string): Promise<Member
 
   if (error) throw error
   await touchTripActivity(tripId)
-  return mapMember(data)
+  return mapMember(data, null)
 }
 
 export async function addItineraryItem(input: {

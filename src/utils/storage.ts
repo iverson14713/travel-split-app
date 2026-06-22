@@ -1,4 +1,5 @@
 import type { RecentTrip, TripStatus, UserSession } from '../types'
+import { getTripMemberId, getTripNickname } from './memberIdentity'
 
 const SESSION_KEY = 'travel-split-session'
 /** 本機近期旅程列表（等同 recent_trip_ids 用途） */
@@ -32,9 +33,14 @@ export function clearSession(): void {
   localStorage.removeItem(SESSION_KEY)
 }
 
-export function hasSessionForTrip(tripCode: string): boolean {
+export function hasSessionForTrip(tripCode: string, tripId?: string): boolean {
+  if (tripId) {
+    const memberId = getTripMemberId(tripId)
+    if (memberId) return true
+  }
+
   const session = getSession()
-  return session?.tripCode === tripCode.toUpperCase()
+  return session?.tripCode === tripCode.toUpperCase() && !!session.memberId
 }
 
 export function getRecentTrips(): RecentTrip[] {
@@ -54,13 +60,16 @@ export function recordRecentTrip(
 ): void {
   const now = entry.lastOpenedAt ?? new Date().toISOString()
   const existing = getRecentTrips().find((t) => t.tripCode === entry.tripCode.toUpperCase())
+  const tripId = entry.tripId ?? existing?.tripId
+  const storedMemberId = tripId ? getTripMemberId(tripId) : null
+  const storedNickname = tripId ? getTripNickname(tripId) : null
   const normalized: RecentTrip = {
     tripCode: entry.tripCode.toUpperCase(),
-    tripId: entry.tripId ?? existing?.tripId,
+    tripId,
     tripName: entry.tripName,
     destination: entry.destination,
-    memberId: entry.memberId,
-    memberName: entry.memberName,
+    memberId: storedMemberId ?? entry.memberId,
+    memberName: storedNickname ?? entry.memberName,
     lastOpenedAt: now,
     status: entry.status ?? existing?.status ?? 'active',
     startDate: entry.startDate ?? existing?.startDate,

@@ -26,6 +26,7 @@ import {
 } from '../services/exchangeRateService'
 import { getShareLink } from '../utils/tripCode'
 import { getLineShareText } from '../utils/shareText'
+import { setTripMemberIdentity } from '../utils/memberIdentity'
 import { setSession, recordRecentTrip } from '../utils/storage'
 
 export function CreateTripPage() {
@@ -77,6 +78,7 @@ export function CreateTripPage() {
         }
       }
 
+      setTripMemberIdentity(trip.id, memberId, ownerName.trim() || '主揪')
       setSession({ tripCode: trip.code, memberId })
       recordRecentTrip({
         tripCode: trip.code,
