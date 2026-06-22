@@ -24,7 +24,7 @@ import { FreeUsageHint } from './FreeUsageHint'
 import { MemberLimitBanner } from './MemberLimitBanner'
 import { ActiveMemberList } from './ActiveMemberList'
 import { RemoveMemberConfirmModal } from './RemoveMemberConfirmModal'
-import { RestorePurchasesButton } from './RestorePurchasesButton'
+import { RestoreTripUnlockButton } from './RestorePurchasesButton'
 import { TripTooLongModal } from './TripTooLongModal'
 import { TripUnlockWindowExceededModal } from './TripUnlockWindowExceededModal'
 import { getShareLink } from '../../utils/tripCode'
@@ -275,7 +275,8 @@ export function SettingsPanel({
               解鎖這趟旅程
             </Button>
           )}
-          <RestorePurchasesButton
+          <RestoreTripUnlockButton
+            tripId={tripId}
             className="restore-purchases restore-purchases--settings"
             onMessage={onStatusMessage}
             onRestored={() => refreshUnlock()}

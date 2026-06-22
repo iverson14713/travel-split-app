@@ -4,6 +4,7 @@ export const DB_TABLES = {
   members: 'travel_members',
   itineraryItems: 'travel_itinerary_items',
   expenses: 'travel_expenses',
+  tripUnlocks: 'trip_unlocks',
 } as const
 
 export type DbTableName = (typeof DB_TABLES)[keyof typeof DB_TABLES]

@@ -136,6 +136,38 @@ create policy "travel_anon_update_expenses"
 create policy "travel_anon_delete_expenses"
   on travel_expenses for delete to anon using (true);
 
+-- trip_unlocks（iOS IAP 單趟解鎖）
+create table if not exists trip_unlocks (
+  id uuid primary key default gen_random_uuid(),
+  trip_id uuid not null references travel_trips(id) on delete cascade,
+  transaction_id text,
+  original_transaction_id text,
+  product_id text,
+  platform text not null default 'ios',
+  source text not null default 'ios_iap',
+  unlocked_at timestamptz not null default now(),
+  unlock_base_start_date date,
+  max_end_date date,
+  unique (trip_id)
+);
+
+create index if not exists trip_unlocks_trip_id_idx on trip_unlocks (trip_id);
+create index if not exists trip_unlocks_original_transaction_id_idx on trip_unlocks (original_transaction_id);
+create unique index if not exists trip_unlocks_transaction_id_unique_idx
+  on trip_unlocks (transaction_id)
+  where transaction_id is not null;
+
+alter table trip_unlocks enable row level security;
+
+create policy "travel_anon_select_trip_unlocks"
+  on trip_unlocks for select to anon using (true);
+
+create policy "travel_anon_insert_trip_unlocks"
+  on trip_unlocks for insert to anon with check (true);
+
+create policy "travel_anon_update_trip_unlocks"
+  on trip_unlocks for update to anon using (true) with check (true);
+
 -- ============================================================
 -- Notes: future automated cleanup
 -- ============================================================

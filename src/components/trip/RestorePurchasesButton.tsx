@@ -1,20 +1,22 @@
 import { useState } from 'react'
 import {
-  getRestorePurchasesUserMessage,
-  restorePurchases,
+  getRestoreTripUnlockMessage,
+  restoreTripUnlock,
 } from '../../services/iapService'
 
-interface RestorePurchasesButtonProps {
+interface RestoreTripUnlockButtonProps {
+  tripId: string
   className?: string
   onMessage?: (message: string) => void
-  onRestored?: (tripIds: string[]) => void
+  onRestored?: () => void
 }
 
-export function RestorePurchasesButton({
+export function RestoreTripUnlockButton({
+  tripId,
   className,
   onMessage,
   onRestored,
-}: RestorePurchasesButtonProps) {
+}: RestoreTripUnlockButtonProps) {
   const [loading, setLoading] = useState(false)
   const [inlineMessage, setInlineMessage] = useState<string | null>(null)
 
@@ -23,14 +25,14 @@ export function RestorePurchasesButton({
     setInlineMessage(null)
 
     try {
-      const result = await restorePurchases()
-      const message = getRestorePurchasesUserMessage(result)
+      const result = await restoreTripUnlock(tripId)
+      const message = getRestoreTripUnlockMessage(result)
 
       setInlineMessage(message)
       onMessage?.(message)
 
-      if (result.status === 'success' && result.restoredTripIds.length > 0) {
-        onRestored?.(result.restoredTripIds)
+      if (result.status === 'success') {
+        onRestored?.()
       }
     } finally {
       setLoading(false)
@@ -45,9 +47,12 @@ export function RestorePurchasesButton({
         onClick={handleClick}
         disabled={loading}
       >
-        {loading ? '恢復中...' : '恢復購買'}
+        {loading ? '檢查中...' : '恢復此旅程解鎖'}
       </button>
       {inlineMessage && <p className="restore-purchases-message">{inlineMessage}</p>}
     </div>
   )
 }
+
+/** @deprecated 使用 RestoreTripUnlockButton */
+export const RestorePurchasesButton = RestoreTripUnlockButton

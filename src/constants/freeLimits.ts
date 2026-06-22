@@ -14,10 +14,9 @@ export const ABSOLUTE_MAX_TRIP_DAYS = 30
 
 export const UPGRADE_FEATURES = [
   '最多 30 天旅程',
-  '旅程結束後仍可查看與結算',
   '不限成員數',
   '不限記帳筆數',
-  '完整統計與結算',
+  '旅程結束後可長期查看',
   '移除推薦卡，畫面更清爽',
 ] as const
 

@@ -1,8 +1,23 @@
+import { Capacitor } from '@capacitor/core'
 import { TRIP_UNLOCK_PRICE_LABEL } from '../constants/freeLimits'
-import { setTripPurchasedUnlocked } from './tripUnlockService'
+import {
+  computeMaxEndDate,
+  isTripMockUnlocked,
+  isTripPurchasedUnlocked,
+  mockUnlockTrip,
+  setTripPurchasedUnlocked,
+} from './tripUnlockService'
+import {
+  fetchTripUnlockByTransactionId,
+  fetchTripUnlockByTripId,
+  insertTripUnlock,
+} from './tripUnlockRepository'
 
-/** iOS App Store 非消耗型商品 ID（正式 IAP 串接時使用） */
-export const IOS_TRIP_UNLOCK_PRODUCT_ID = 'trip_unlock_single'
+/** iOS App Store 消耗型商品 ID（須與 App Store Connect 一致） */
+export const IOS_TRIP_UNLOCK_PRODUCT_ID = 'trip_unlock_pass'
+
+/** App Store Connect 顯示名稱：單趟旅程解鎖 */
+export const IOS_TRIP_UNLOCK_PRODUCT_NAME = '單趟旅程解鎖'
 
 export interface TripUnlockRecord {
   trip_id: string
@@ -16,38 +31,89 @@ export interface TripUnlockRecord {
   source?: 'mock' | 'ios_iap' | 'developer'
 }
 
-export type RestorePurchasesResult =
-  | { status: 'not_available'; message: string }
-  | { status: 'no_purchases'; message: string }
-  | { status: 'success'; restoredTripIds: string[]; records: TripUnlockRecord[] }
+export type RestoreTripUnlockResult =
+  | { status: 'success' }
+  | { status: 'not_found'; message: string }
   | { status: 'error'; message: string }
 
-const IAP_NOT_AVAILABLE_MESSAGE =
-  '正式購買功能尚未開放，之後可在這裡恢復已購買的旅程解鎖。'
+export type PurchaseTripUnlockResult =
+  | { status: 'success' }
+  | { status: 'cancelled' }
+  | { status: 'error'; message: string }
 
-/** 正式 StoreKit / Capacitor IAP 是否已串接 */
+const RESTORE_TRIP_NOT_FOUND_MESSAGE = '找不到此旅程的解鎖紀錄'
+const RESTORE_TRIP_SUCCESS_MESSAGE = '已重新檢查此旅程的解鎖狀態。'
+const PURCHASE_ERROR_MESSAGE = '購買失敗，請稍後再試'
+const NETWORK_ERROR_MESSAGE = '網路連線異常，請稍後再試'
+
+let billingSupportedCache: boolean | null = null
+
+function isNativeIos(): boolean {
+  return Capacitor.isNativePlatform() && Capacitor.getPlatform() === 'ios'
+}
+
+async function loadNativePurchases() {
+  if (!isNativeIos()) return null
+  try {
+    return await import('@capgo/native-purchases')
+  } catch {
+    return null
+  }
+}
+
+/** 正式 StoreKit / Capacitor IAP 是否可用（僅 iOS 原生） */
 export function isIapAvailable(): boolean {
-  return false
+  return isNativeIos()
+}
+
+export async function checkIapBillingSupported(): Promise<boolean> {
+  if (!isNativeIos()) return false
+  if (billingSupportedCache != null) return billingSupportedCache
+
+  const mod = await loadNativePurchases()
+  if (!mod) {
+    billingSupportedCache = false
+    return false
+  }
+
+  try {
+    const { isBillingSupported } = await mod.NativePurchases.isBillingSupported()
+    billingSupportedCache = isBillingSupported
+    return isBillingSupported
+  } catch {
+    billingSupportedCache = false
+    return false
+  }
 }
 
 export interface StoreKitProduct {
   productId: string
   localizedPrice: string
+  title: string
 }
 
-/**
- * 向 StoreKit 取得商品資訊（含在地化價格字串）。
- * 正式 IAP 串接時實作 Capacitor In-App Purchase getProducts()。
- */
 export async function fetchStoreKitProduct(
   productId: string,
 ): Promise<StoreKitProduct | null> {
-  // TODO: Capacitor In-App Purchase getProducts([productId])
-  void productId
-  return null
+  const mod = await loadNativePurchases()
+  if (!mod || !(await checkIapBillingSupported())) return null
+
+  try {
+    const { product } = await mod.NativePurchases.getProduct({
+      productIdentifier: productId,
+      productType: mod.PURCHASE_TYPE.INAPP,
+    })
+
+    return {
+      productId: product.identifier,
+      localizedPrice: product.priceString,
+      title: product.title,
+    }
+  } catch {
+    return null
+  }
 }
 
-/** 取得單趟解鎖商品的顯示價格；IAP 未串接時回傳 TRIP_UNLOCK_PRICE_LABEL */
 export async function fetchTripUnlockProductPriceLabel(): Promise<string> {
   if (!isIapAvailable()) {
     return TRIP_UNLOCK_PRICE_LABEL
@@ -57,127 +123,171 @@ export async function fetchTripUnlockProductPriceLabel(): Promise<string> {
   return product?.localizedPrice ?? TRIP_UNLOCK_PRICE_LABEL
 }
 
-/**
- * 將恢復的交易紀錄套用至本機解鎖狀態（使用 purchased unlock，非 mock）。
- * 未來可改為先寫入 Supabase trip_unlocks，再同步本機快取。
- */
-export function applyRestoredUnlockRecords(records: TripUnlockRecord[]): string[] {
-  const restoredTripIds: string[] = []
+function applyUnlockRecord(record: TripUnlockRecord): void {
+  if (!record.trip_id) return
+  setTripPurchasedUnlocked(record.trip_id, true, record.unlock_base_start_date)
+}
 
-  for (const record of records) {
-    if (!record.trip_id) continue
-    setTripPurchasedUnlocked(record.trip_id, true, record.unlock_base_start_date)
-    restoredTripIds.push(record.trip_id)
+export async function syncTripUnlockFromServer(tripId: string): Promise<boolean> {
+  try {
+    const record = await fetchTripUnlockByTripId(tripId)
+    if (!record) return false
+    applyUnlockRecord(record)
+    return true
+  } catch {
+    return false
+  }
+}
+
+async function finishIosTransaction(transactionId: string): Promise<void> {
+  const mod = await loadNativePurchases()
+  if (!mod) return
+
+  await mod.NativePurchases.acknowledgePurchase({
+    purchaseToken: transactionId,
+  })
+}
+
+async function persistTripUnlock(
+  tripId: string,
+  unlockBaseStartDate: string,
+  transactionId: string,
+  originalTransactionId: string,
+): Promise<TripUnlockRecord> {
+  const existing = await fetchTripUnlockByTransactionId(transactionId)
+  if (existing) {
+    applyUnlockRecord(existing)
+    return existing
   }
 
-  return [...new Set(restoredTripIds)]
+  const maxEndDate = computeMaxEndDate(unlockBaseStartDate)
+
+  const record = await insertTripUnlock({
+    tripId,
+    transactionId,
+    originalTransactionId,
+    productId: IOS_TRIP_UNLOCK_PRODUCT_ID,
+    unlockBaseStartDate,
+    maxEndDate,
+  })
+
+  applyUnlockRecord(record)
+  return record
 }
 
-/**
- * 未來：從 Supabase trip_unlocks 依 original_transaction_id 查詢已購買紀錄。
- *
- * 預期資料表欄位：
- * - trip_id
- * - transaction_id
- * - original_transaction_id
- * - product_id
- * - platform ('ios')
- * - unlocked_at
- * - unlock_base_start_date
- * - max_end_date
- * - source ('mock' | 'ios_iap' | 'developer')
- */
-export async function fetchTripUnlocksByTransactions(
-  _transactionIds: string[],
-): Promise<TripUnlockRecord[]> {
-  // TODO: query Supabase trip_unlocks when backend is ready
-  return []
+function isPurchaseCancelledError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return (
+    /cancel/i.test(message) ||
+    /user.*cancel/i.test(message) ||
+    /payment.*cancel/i.test(message) ||
+    /SKError.*2/.test(message)
+  )
 }
 
-/**
- * 未來：呼叫 StoreKit 恢復購買 / 重新同步交易，回傳非消耗型商品交易。
- */
-export async function syncStoreKitTransactions(): Promise<
-  Array<{
-    transactionId: string
-    originalTransactionId: string
-    productId: string
-  }>
-> {
-  // TODO: Capacitor In-App Purchase / StoreKit restorePurchases()
-  return []
+function isNetworkError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return /network/i.test(message) || /offline/i.test(message) || /timeout/i.test(message)
 }
 
-/**
- * 恢復已購買的單趟旅程解鎖。
- *
- * 正式 IAP 流程（預留）：
- * 1. 呼叫 StoreKit 恢復購買 / 重新同步交易
- * 2. 篩選非消耗型商品（IOS_TRIP_UNLOCK_PRODUCT_ID）
- * 3. 取得 transactionId / originalTransactionId
- * 4. 對照 Supabase trip_unlocks（或本機快取）找出對應 trip_id
- * 5. 將對應旅程標記為 unlocked（setTripPurchasedUnlocked）
- */
-export async function restorePurchases(): Promise<RestorePurchasesResult> {
+export async function purchaseTripUnlock(
+  tripId: string,
+  unlockBaseStartDate: string,
+): Promise<PurchaseTripUnlockResult> {
   if (!isIapAvailable()) {
-    return {
-      status: 'not_available',
-      message: IAP_NOT_AVAILABLE_MESSAGE,
-    }
+    return { status: 'error', message: '目前裝置不支援 App Store 購買' }
+  }
+
+  if (!(await checkIapBillingSupported())) {
+    return { status: 'error', message: 'App Store 購買目前無法使用' }
+  }
+
+  const mod = await loadNativePurchases()
+  if (!mod) {
+    return { status: 'error', message: PURCHASE_ERROR_MESSAGE }
   }
 
   try {
-    const transactions = await syncStoreKitTransactions()
-    const unlockTransactions = transactions.filter(
-      (tx) => tx.productId === IOS_TRIP_UNLOCK_PRODUCT_ID,
+    const transaction = await mod.NativePurchases.purchaseProduct({
+      productIdentifier: IOS_TRIP_UNLOCK_PRODUCT_ID,
+      productType: mod.PURCHASE_TYPE.INAPP,
+      appAccountToken: tripId,
+      quantity: 1,
+      autoAcknowledgePurchases: false,
+    })
+
+    if (transaction.revocationDate) {
+      return { status: 'error', message: PURCHASE_ERROR_MESSAGE }
+    }
+
+    await persistTripUnlock(
+      tripId,
+      unlockBaseStartDate,
+      transaction.transactionId,
+      transaction.transactionId,
     )
 
-    if (unlockTransactions.length === 0) {
-      return {
-        status: 'no_purchases',
-        message: '沒有找到可恢復的旅程解鎖購買紀錄。',
-      }
+    await finishIosTransaction(transaction.transactionId)
+
+    return { status: 'success' }
+  } catch (error) {
+    if (isPurchaseCancelledError(error)) {
+      return { status: 'cancelled' }
     }
-
-    const transactionIds = unlockTransactions.flatMap((tx) => [
-      tx.transactionId,
-      tx.originalTransactionId,
-    ])
-
-    const records = await fetchTripUnlocksByTransactions(transactionIds)
-
-    if (records.length === 0) {
-      return {
-        status: 'no_purchases',
-        message: '沒有找到可恢復的旅程解鎖購買紀錄。',
-      }
+    if (isNetworkError(error)) {
+      return { status: 'error', message: NETWORK_ERROR_MESSAGE }
     }
-
-    const restoredTripIds = applyRestoredUnlockRecords(records)
-
-    return {
-      status: 'success',
-      restoredTripIds,
-      records,
-    }
-  } catch {
-    return {
-      status: 'error',
-      message: '恢復購買時發生錯誤，請稍後再試。',
-    }
+    return { status: 'error', message: PURCHASE_ERROR_MESSAGE }
   }
 }
 
-export function getRestorePurchasesUserMessage(result: RestorePurchasesResult): string {
+/**
+ * iOS 走 App Store IAP（Consumable）；Web / 開發環境維持 mock unlock。
+ */
+export async function unlockTripWithPurchaseOrMock(
+  tripId: string,
+  unlockBaseStartDate: string,
+): Promise<PurchaseTripUnlockResult> {
+  if (await checkIapBillingSupported()) {
+    return purchaseTripUnlock(tripId, unlockBaseStartDate)
+  }
+
+  mockUnlockTrip(tripId, unlockBaseStartDate)
+  return { status: 'success' }
+}
+
+/**
+ * 重新檢查目前旅程的解鎖狀態（Consumable 不依賴 Apple restore）。
+ * 優先查 Supabase trip_unlocks，並保留本機 mock / purchased 快取。
+ */
+export async function restoreTripUnlock(tripId: string): Promise<RestoreTripUnlockResult> {
+  if (!tripId) {
+    return { status: 'not_found', message: RESTORE_TRIP_NOT_FOUND_MESSAGE }
+  }
+
+  try {
+    const synced = await syncTripUnlockFromServer(tripId)
+    if (synced) {
+      return { status: 'success' }
+    }
+
+    if (isTripPurchasedUnlocked(tripId) || isTripMockUnlocked(tripId)) {
+      return { status: 'success' }
+    }
+
+    return { status: 'not_found', message: RESTORE_TRIP_NOT_FOUND_MESSAGE }
+  } catch {
+    return { status: 'error', message: NETWORK_ERROR_MESSAGE }
+  }
+}
+
+export function getRestoreTripUnlockMessage(result: RestoreTripUnlockResult): string {
   switch (result.status) {
     case 'success':
-      return restoredTripsMessage(result.restoredTripIds.length)
+      return RESTORE_TRIP_SUCCESS_MESSAGE
+    case 'not_found':
+      return result.message
     default:
       return result.message
   }
-}
-
-function restoredTripsMessage(count: number): string {
-  if (count === 0) return '沒有找到可恢復的旅程解鎖購買紀錄。'
-  return `已恢復 ${count} 趟旅程的解鎖狀態。`
 }

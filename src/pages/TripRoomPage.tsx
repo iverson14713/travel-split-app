@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { useTrip } from '../hooks/useTrip'
 import { useTripUnlock } from '../hooks/useTripUnlock'
+import { useSyncTripUnlockFromServer } from '../hooks/useSyncTripUnlockFromServer'
 import { getSession, recordRecentTrip, updateRecentTripUnlocked } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getActiveMemberCount, isActiveMember } from '../utils/members'
@@ -60,6 +61,7 @@ export function TripRoomPage() {
   const [showTripEndedModal, setShowTripEndedModal] = useState(false)
 
   const { refresh: refreshUnlock } = useTripUnlock(trip)
+  useSyncTripUnlockFromServer(trip?.id, refreshUnlock)
 
   const tripCode = code?.toUpperCase() ?? ''
   const session = getSession()

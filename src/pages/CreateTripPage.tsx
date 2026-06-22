@@ -8,9 +8,9 @@ import { UpgradeModal } from '../components/trip/UpgradeModal'
 import { TripTooLongModal } from '../components/trip/TripTooLongModal'
 import { TripUnlockWindowExceededModal } from '../components/trip/TripUnlockWindowExceededModal'
 import { createTrip } from '../services/tripService'
+import { unlockTripWithPurchaseOrMock } from '../services/iapService'
 import {
   checkCreateMemberPlan,
-  mockUnlockTrip,
   validateTripDates,
 } from '../services/tripUnlockService'
 import type { UpgradeReason } from '../services/tripUnlockService'
@@ -64,8 +64,17 @@ export function CreateTripPage() {
         exchangeRateFetchedAt: rates.fetchedAt,
       })
 
+      let unlockedSuccessfully = false
       if (unlockAfterCreate) {
-        mockUnlockTrip(trip.id, startDate)
+        const unlockResult = await unlockTripWithPurchaseOrMock(trip.id, startDate)
+        if (unlockResult.status === 'success') {
+          unlockedSuccessfully = true
+        } else if (unlockResult.status === 'error') {
+          setError(unlockResult.message)
+          return
+        } else if (unlockResult.status === 'cancelled') {
+          setError('已建立旅程，但尚未完成解鎖')
+        }
       }
 
       setSession({ tripCode: trip.code, memberId })
@@ -79,7 +88,7 @@ export function CreateTripPage() {
         startDate: trip.startDate,
         endDate: trip.endDate,
         memberCount: 1,
-        unlocked: unlockAfterCreate,
+        unlocked: unlockedSuccessfully,
       })
       setCreatedRates(rates)
       setCreatedCode(trip.code)
