@@ -348,6 +348,7 @@ export function TripRoomPage() {
               currentMemberId={currentMember?.id}
               onReload={reload}
               onUpgradeRequired={handleShowUpgrade}
+              onStatusMessage={setStatusToast}
             />
           )}
         </div>

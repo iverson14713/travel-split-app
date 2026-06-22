@@ -11,7 +11,6 @@ import type { ReloadOptions } from '../../hooks/useTrip'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
 import {
-  canSettle,
   getTripDisplayStatus,
   TRIP_ARCHIVED_VIEW_HINT,
   TRIP_ENDED_VIEW_HINT,
@@ -24,9 +23,17 @@ interface SettlementTabProps {
   currentMemberId?: string
   onReload: (options?: ReloadOptions) => Promise<void>
   onUpgradeRequired?: (reason: UpgradeReason) => void
+  onStatusMessage?: (message: string) => void
 }
 
-export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgradeRequired }: SettlementTabProps) {
+export function SettlementTab({
+  trip,
+  tripId,
+  currentMemberId,
+  onReload,
+  onUpgradeRequired,
+  onStatusMessage,
+}: SettlementTabProps) {
   const [showRepayModal, setShowRepayModal] = useState(false)
   const [repayPreset, setRepayPreset] = useState<ExpenseUpsertModalPreset | undefined>(undefined)
 
@@ -47,7 +54,25 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
   const isArchived = trip.status === 'archived'
   const isSettling = tripStatus === 'settling'
   const isEnded = tripStatus === 'ended'
-  const canRepay = canSettle(trip)
+
+  const openRepayModal = (item: (typeof settlementItems)[number]) => {
+    if (!item.fromId || !item.toId) return
+    const currency = (item.currency || 'TWD').toUpperCase()
+    setRepayPreset({
+      type: 'transfer',
+      amount: item.amount,
+      currency,
+      payerMemberId: item.fromId,
+      receiverMemberId: item.toId,
+      note: `結算還款：${item.from} 還款給 ${item.to}`,
+    })
+    setShowRepayModal(true)
+  }
+
+  const handleCloseRepayModal = () => {
+    setShowRepayModal(false)
+    setRepayPreset(undefined)
+  }
 
   return (
     <div className="tab-panel">
@@ -81,35 +106,33 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
         </div>
       ) : (
         <div className="settlement-list">
-          {settlementItems.map((item, i) => (
-            <Card key={`${item.fromId}-${item.toId}-${i}`} className="settlement-card">
-              <div className="settlement-flow">
-                <span className="settlement-from">{item.from}</span>
-                <span className="settlement-arrow">→ 付給 →</span>
-                <span className="settlement-to">{item.to}</span>
-              </div>
-              <div className="settlement-bottom">
-                <p className="settlement-amount">TWD {formatAmount(item.amount, 'TWD')}</p>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => {
-                    setRepayPreset({
-                      type: 'transfer',
-                      amount: item.amount,
-                      currency: 'TWD',
-                      payerMemberId: item.fromId,
-                      receiverMemberId: item.toId,
-                    })
-                    setShowRepayModal(true)
-                  }}
-                  disabled={!canRepay || !item.fromId || !item.toId}
-                >
-                  記錄已還款
-                </Button>
-              </div>
-            </Card>
-          ))}
+          {settlementItems.map((item, i) => {
+            const currency = (item.currency || 'TWD').toUpperCase()
+            return (
+              <Card key={`${item.fromId}-${item.toId}-${i}`} className="settlement-card">
+                <div className="settlement-flow">
+                  <span className="settlement-from">{item.from}</span>
+                  <span className="settlement-arrow">→ 付給 →</span>
+                  <span className="settlement-to">{item.to}</span>
+                </div>
+                <div className="settlement-bottom">
+                  <p className="settlement-amount">
+                    {currency} {formatAmount(item.amount, currency)}
+                  </p>
+                  {!isArchived && item.fromId && item.toId && (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      type="button"
+                      onClick={() => openRepayModal(item)}
+                    >
+                      記錄已還款
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            )
+          })}
         </div>
       )}
 
@@ -121,14 +144,16 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
 
       <ExpenseUpsertModal
         open={showRepayModal}
-        onClose={() => setShowRepayModal(false)}
+        onClose={handleCloseRepayModal}
         title="記錄還款/轉帳"
         trip={trip}
         tripId={tripId}
         currentMemberId={currentMemberId}
         preset={repayPreset}
+        savedMessage="已記錄還款"
         onSaved={onReload}
         onUpgradeRequired={onUpgradeRequired}
+        onStatusMessage={onStatusMessage}
       />
     </div>
   )

@@ -27,6 +27,7 @@ export interface ExpenseUpsertModalPreset {
   currency?: string
   payerMemberId?: string
   receiverMemberId?: string
+  note?: string
 }
 
 interface ExpenseUpsertModalProps {
@@ -40,6 +41,8 @@ interface ExpenseUpsertModalProps {
   expense?: Expense
   onSaved: () => Promise<void>
   onUpgradeRequired?: (reason: UpgradeReason) => void
+  onStatusMessage?: (message: string) => void
+  savedMessage?: string
 }
 
 export function ExpenseUpsertModal({
@@ -53,6 +56,8 @@ export function ExpenseUpsertModal({
   expense,
   onSaved,
   onUpgradeRequired,
+  onStatusMessage,
+  savedMessage,
 }: ExpenseUpsertModalProps) {
   const activeMembers = useMemo(() => getActiveMembers(trip.members), [trip.members])
   const selectableMembers = useMemo(
@@ -68,6 +73,11 @@ export function ExpenseUpsertModal({
         label: m.nickname + (m.isHost ? '（主揪）' : ''),
       })),
     [selectableMembers],
+  )
+
+  const memberSelectOptions = useMemo(
+    () => [{ value: '', label: '請選擇' }, ...memberOptions],
+    [memberOptions],
   )
 
   const [type, setType] = useState<ExpenseType>('expense')
@@ -115,7 +125,7 @@ export function ExpenseUpsertModal({
       setReceiverId(preset?.receiverMemberId ?? '')
       setParticipantIds(activeMembers.map((m) => m.id))
       setCategory(DEFAULT_EXPENSE_CATEGORY)
-      setNote('')
+      setNote(preset?.note ?? '')
     }
 
     setError('')
@@ -126,28 +136,43 @@ export function ExpenseUpsertModal({
     setParticipantIds((prev) => (prev.includes(id) ? prev.filter((p) => p !== id) : [...prev, id]))
   }
 
-  const handleSave = async () => {
+  const validateForm = (): string | null => {
     const parsedAmount = parseFloat(amount)
-    if (!parsedAmount || parsedAmount <= 0) return
-    if (!payerId) return
-
-    if (type === 'expense') {
-      if (participantIds.length === 0) return
-    } else {
-      if (!receiverId) return
-      if (receiverId === payerId) {
-        setError('轉出人與轉入人不能相同')
-        return
-      }
+    if (!amount.trim() || !Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return '請輸入有效金額'
     }
+    if (!payerId) {
+      return type === 'transfer' ? '請選擇轉出人' : '請選擇付款人'
+    }
+    if (type === 'transfer') {
+      if (!receiverId) return '請選擇轉入人'
+      if (receiverId === payerId) return '轉出人與轉入人不能相同'
+      return null
+    }
+    if (participantIds.length === 0) return '請至少選擇一位參與分攤成員'
+    return null
+  }
+
+  const handleSave = async () => {
+    const validationError = validateForm()
+    if (validationError) {
+      setError(validationError)
+      return
+    }
+
+    const parsedAmount = parseFloat(amount)
 
     setSubmitting(true)
     setError('')
     try {
-      if (!expense) {
+      if (!expense && type === 'expense') {
         const blocked = checkExpenseLimit(trip)
         if (blocked) {
-          onUpgradeRequired?.(blocked)
+          if (onUpgradeRequired) {
+            onUpgradeRequired(blocked)
+          } else {
+            setError('已達免費版記帳上限，請解鎖後再新增')
+          }
           return
         }
       }
@@ -176,9 +201,14 @@ export function ExpenseUpsertModal({
         await addExpense(payload)
       }
       await onSaved()
+      if (savedMessage) {
+        onStatusMessage?.(savedMessage)
+      } else if (type === 'transfer' && !expense) {
+        onStatusMessage?.('已記錄還款')
+      }
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '新增失敗')
+      setError(err instanceof Error ? err.message : '儲存失敗，請稍後再試')
     } finally {
       setSubmitting(false)
     }
@@ -235,7 +265,7 @@ export function ExpenseUpsertModal({
           label={type === 'transfer' ? '轉出人' : '付款人'}
           value={payerId}
           onChange={(e) => setPayerId(e.target.value)}
-          options={memberOptions}
+          options={memberSelectOptions}
         />
 
         {type === 'expense' ? (
@@ -268,7 +298,7 @@ export function ExpenseUpsertModal({
             label="轉入人"
             value={receiverId}
             onChange={(e) => setReceiverId(e.target.value)}
-            options={memberOptions}
+            options={memberSelectOptions}
           />
         )}
 

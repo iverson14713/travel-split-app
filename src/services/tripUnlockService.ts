@@ -8,6 +8,7 @@ import {
 import type { Trip } from '../types'
 import { addDaysToDateString, formatDisplayDate, getTripDays } from '../utils/dates'
 import { getActiveMemberCount } from '../utils/members'
+import { countExpenseItems } from '../utils/settlement'
 
 export type TripUnlockStatus = 'free' | 'unlocked' | 'developer_unlocked'
 
@@ -246,7 +247,7 @@ export function getTripDayCount(startDate: string, endDate: string): number {
 }
 
 export function countTripExpenses(trip: Trip): number {
-  return trip.expenses.length
+  return countExpenseItems(trip.expenses)
 }
 
 export interface TripUsageSnapshot {
