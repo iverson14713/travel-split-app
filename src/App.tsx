@@ -8,6 +8,7 @@ import { JoinTripPage } from './pages/JoinTripPage'
 import { TripRoomPage } from './pages/TripRoomPage'
 import { PrivacyPage } from './pages/PrivacyPage'
 import { TermsPage } from './pages/TermsPage'
+import { SupportPage } from './pages/SupportPage'
 
 export default function App() {
   if (!isSupabaseConfigured) {
@@ -24,6 +25,7 @@ export default function App() {
           <Route path="/trip/:code" element={<TripRoomPage />} />
           <Route path="/privacy" element={<PrivacyPage />} />
           <Route path="/terms" element={<TermsPage />} />
+          <Route path="/support" element={<SupportPage />} />
         </Routes>
       </BrowserRouter>
     </AppUIProvider>

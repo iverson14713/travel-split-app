@@ -5,7 +5,7 @@ import { hasSeenOnboarding, setOnboardingSeen } from '../utils/storage'
 
 const SPLASH_DURATION_MS = 1200
 
-const LEGAL_PATHS = new Set(['/privacy', '/terms'])
+const LEGAL_PATHS = new Set(['/privacy', '/terms', '/support'])
 
 function isLegalEntryPath(): boolean {
   return LEGAL_PATHS.has(window.location.pathname)
