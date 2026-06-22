@@ -5,8 +5,14 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { UpgradeModal } from '../components/trip/UpgradeModal'
+import { TripTooLongModal } from '../components/trip/TripTooLongModal'
 import { createTrip } from '../services/tripService'
-import { checkCreateMemberPlan, checkDayLimit, mockUnlockTrip } from '../services/tripUnlockService'
+import {
+  checkCreateMemberPlan,
+  checkDayLimit,
+  exceedsAbsoluteMaxDays,
+  mockUnlockTrip,
+} from '../services/tripUnlockService'
 import type { UpgradeReason } from '../services/tripUnlockService'
 import {
   ESTIMATED_MEMBER_OPTIONS,
@@ -37,6 +43,7 @@ export function CreateTripPage() {
   const [error, setError] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
+  const [showTooLongModal, setShowTooLongModal] = useState(false)
 
   const executeCreate = async (unlockAfterCreate = false) => {
     setSubmitting(true)
@@ -93,6 +100,11 @@ export function CreateTripPage() {
     }
     if (new Date(endDate) < new Date(startDate)) {
       setError('結束日期不能早於開始日期')
+      return
+    }
+
+    if (exceedsAbsoluteMaxDays(startDate, endDate)) {
+      setShowTooLongModal(true)
       return
     }
 
@@ -264,9 +276,13 @@ export function CreateTripPage() {
           onClose={() => setUpgradeReason(null)}
           reason={upgradeReason ?? 'day_limit'}
           onUnlockAndProceed={
-            upgradeReason === 'create_member_limit' ? handleUnlockAndCreate : undefined
+            upgradeReason === 'create_member_limit' || upgradeReason === 'day_limit'
+              ? handleUnlockAndCreate
+              : undefined
           }
         />
+
+        <TripTooLongModal open={showTooLongModal} onClose={() => setShowTooLongModal(false)} />
       </div>
     </Layout>
   )

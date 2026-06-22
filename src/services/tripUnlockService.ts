@@ -1,4 +1,10 @@
-import { ESTIMATED_MEMBER_FIVE_PLUS, FREE_LIMITS, type EstimatedMemberCount } from '../constants/freeLimits'
+import {
+  ABSOLUTE_MAX_TRIP_DAYS,
+  ESTIMATED_MEMBER_FIVE_PLUS,
+  FREE_LIMITS,
+  UNLOCKED_LIMITS,
+  type EstimatedMemberCount,
+} from '../constants/freeLimits'
 import type { Trip } from '../types'
 import { getActiveMemberCount } from '../utils/members'
 import { getTripDays } from '../utils/dates'
@@ -124,6 +130,10 @@ export interface TripUsageSnapshot {
   status: TripUnlockStatus
 }
 
+export function exceedsAbsoluteMaxDays(startDate: string, endDate: string): boolean {
+  return getTripDayCount(startDate, endDate) > ABSOLUTE_MAX_TRIP_DAYS
+}
+
 export function getTripUsageLimits(trip: Trip): TripUsageSnapshot {
   const status = getEffectiveTripUnlockStatus(trip.id)
   const isUnlimited = status !== 'free'
@@ -133,7 +143,7 @@ export function getTripUsageLimits(trip: Trip): TripUsageSnapshot {
     days: getTripDayCount(trip.startDate, trip.endDate),
     expenses: countTripExpenses(trip),
     maxMembers: isUnlimited ? Infinity : FREE_LIMITS.maxMembers,
-    maxDays: isUnlimited ? Infinity : FREE_LIMITS.maxDays,
+    maxDays: isUnlimited ? UNLOCKED_LIMITS.maxDays : FREE_LIMITS.maxDays,
     maxExpenses: isUnlimited ? Infinity : FREE_LIMITS.maxExpenses,
     isUnlimited,
     status,
@@ -158,6 +168,7 @@ export function checkMemberLimit(trip: Trip): UpgradeReason | null {
 }
 
 export function checkDayLimit(startDate: string, endDate: string, tripId?: string): UpgradeReason | null {
+  if (exceedsAbsoluteMaxDays(startDate, endDate)) return null
   if (tripId && isTripUnlocked(tripId)) return null
   const days = getTripDayCount(startDate, endDate)
   if (days > FREE_LIMITS.maxDays) return 'day_limit'
@@ -190,7 +201,7 @@ export function getUpgradeReasonCopy(reason: UpgradeReason): { headline: string;
     case 'day_limit':
       return {
         headline: '天數已達免費上限',
-        detail: '免費版最多規劃 5 天。解鎖後可規劃完整旅程。',
+        detail: '免費版最多規劃 5 天。解鎖後這趟旅程可支援最多 30 天。',
       }
     case 'expense_limit':
       return {
@@ -211,7 +222,7 @@ export function getUpgradeLeadCopy(reason: UpgradeReason): string {
   if (reason === 'create_member_limit') {
     return '免費版適合 4 人以內小旅行。如果這趟旅程有 5 位以上同伴，解鎖後可加入更多成員並使用完整功能。'
   }
-  return '免費版適合小旅行。解鎖後這趟旅程可使用完整功能。'
+  return '免費版適合 5 天內小旅行。解鎖後這趟旅程可支援最多 30 天、更多成員與不限記帳筆數。'
 }
 
 export function getUnlockStatusLabel(status: TripUnlockStatus): string {

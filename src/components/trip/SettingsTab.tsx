@@ -7,11 +7,16 @@ import {
   softDeleteTrip,
   updateEditPermission,
   updateMemberName,
+  updateTripDates,
 } from '../../services/tripService'
 import { getActiveMembers } from '../../utils/members'
 import { useRemoveMember } from '../../hooks/useRemoveMember'
 import { useTripUnlock } from '../../hooks/useTripUnlock'
 import type { UpgradeReason } from '../../services/tripUnlockService'
+import {
+  checkDayLimit,
+  exceedsAbsoluteMaxDays,
+} from '../../services/tripUnlockService'
 import { FREE_LIMITS } from '../../constants/freeLimits'
 import { ExchangeRateSettings } from './ExchangeRateSettings'
 import { ArchivedTripBanner } from './ArchivedTripBanner'
@@ -20,6 +25,7 @@ import { MemberLimitBanner } from './MemberLimitBanner'
 import { ActiveMemberList } from './ActiveMemberList'
 import { RemoveMemberConfirmModal } from './RemoveMemberConfirmModal'
 import { RestorePurchasesButton } from './RestorePurchasesButton'
+import { TripTooLongModal } from './TripTooLongModal'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { updateRecentTripStatus } from '../../utils/storage'
@@ -57,6 +63,11 @@ export function SettingsPanel({
   const [nameError, setNameError] = useState('')
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showTooLongModal, setShowTooLongModal] = useState(false)
+  const [tripStartDate, setTripStartDate] = useState(trip.startDate)
+  const [tripEndDate, setTripEndDate] = useState(trip.endDate)
+  const [savingDates, setSavingDates] = useState(false)
+  const [dateError, setDateError] = useState('')
   const { requestOnboarding } = useAppUI()
   const shareLink = getShareLink(trip.code)
   const { usage, refresh: refreshUnlock } = useTripUnlock(trip)
@@ -87,6 +98,43 @@ export function SettingsPanel({
   useEffect(() => {
     setMyName(myMember?.nickname ?? '')
   }, [myMember?.nickname])
+
+  useEffect(() => {
+    setTripStartDate(trip.startDate)
+    setTripEndDate(trip.endDate)
+  }, [trip.startDate, trip.endDate])
+
+  const handleSaveTripDates = async () => {
+    setDateError('')
+    if (!tripStartDate || !tripEndDate) {
+      setDateError('請選擇開始與結束日期')
+      return
+    }
+    if (new Date(tripEndDate) < new Date(tripStartDate)) {
+      setDateError('結束日期不能早於開始日期')
+      return
+    }
+    if (exceedsAbsoluteMaxDays(tripStartDate, tripEndDate)) {
+      setShowTooLongModal(true)
+      return
+    }
+    const dayBlocked = checkDayLimit(tripStartDate, tripEndDate, tripId)
+    if (dayBlocked) {
+      onUpgradeRequired?.(dayBlocked)
+      return
+    }
+
+    setSavingDates(true)
+    try {
+      await updateTripDates(tripId, tripStartDate, tripEndDate)
+      await onReload({ silent: true })
+      onStatusMessage?.('已更新旅程日期')
+    } catch (err) {
+      setDateError(err instanceof Error ? err.message : '更新日期失敗')
+    } finally {
+      setSavingDates(false)
+    }
+  }
 
   const handlePermissionChange = async (permission: EditPermission) => {
     if (!isHost || isArchived || trip.editPermission === permission) return
@@ -198,6 +246,44 @@ export function SettingsPanel({
             onMessage={onStatusMessage}
             onRestored={() => refreshUnlock()}
           />
+        </section>
+      )}
+
+      {isHost && (
+        <section className="settings-section">
+          <h3 className="settings-title">旅程日期</h3>
+          <Card className="settings-card">
+            <Input
+              label="開始日期"
+              type="date"
+              value={tripStartDate}
+              onChange={(e) => setTripStartDate(e.target.value)}
+              disabled={isArchived}
+            />
+            <Input
+              label="結束日期"
+              type="date"
+              value={tripEndDate}
+              onChange={(e) => setTripEndDate(e.target.value)}
+              disabled={isArchived}
+            />
+            {dateError && <p className="form-error-msg">{dateError}</p>}
+            <Button
+              fullWidth
+              onClick={handleSaveTripDates}
+              disabled={
+                isArchived ||
+                savingDates ||
+                (tripStartDate === trip.startDate && tripEndDate === trip.endDate)
+              }
+            >
+              {savingDates ? '儲存中...' : '儲存日期'}
+            </Button>
+            {isArchived && <p className="settings-hint">已封存旅行無法修改日期</p>}
+            {!isArchived && (
+              <p className="settings-hint">免費版最多 5 天；解鎖後最多 30 天。</p>
+            )}
+          </Card>
         </section>
       )}
 
@@ -349,6 +435,8 @@ export function SettingsPanel({
           </button>
         </Card>
       </section>
+
+      <TripTooLongModal open={showTooLongModal} onClose={() => setShowTooLongModal(false)} />
 
       <RemoveMemberConfirmModal
         member={memberToRemove}

@@ -12,6 +12,7 @@ import {
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
+import { FreeAppRecommendation } from './FreeAppRecommendation'
 
 interface OverviewTabProps {
   trip: Trip
@@ -172,6 +173,8 @@ export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: Overvie
       <p className="overview-footnote">
         台幣金額依記帳當下匯率估算，實際刷卡金額可能略有差異。
       </p>
+
+      <FreeAppRecommendation trip={trip} />
     </div>
   )
 }

@@ -10,6 +10,7 @@ import type { UpgradeReason } from '../../services/tripUnlockService'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
+import { FreeAppRecommendation } from './FreeAppRecommendation'
 
 interface SettlementTabProps {
   trip: Trip
@@ -93,6 +94,8 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
       {hasAnyExpense && (
         <p className="overview-footnote">台幣金額依記帳當下匯率估算，實際刷卡金額可能略有差異。</p>
       )}
+
+      <FreeAppRecommendation trip={trip} />
 
       <ExpenseUpsertModal
         open={showRepayModal}

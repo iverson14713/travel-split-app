@@ -482,6 +482,25 @@ export async function updateEditPermission(
   if (error) throw error
 }
 
+export async function updateTripDates(
+  tripId: string,
+  startDate: string,
+  endDate: string,
+): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({
+      start_date: startDate,
+      end_date: endDate,
+      last_activity_at: new Date().toISOString(),
+    })
+    .eq('id', tripId)
+
+  if (error) throw error
+}
+
 export async function updateExchangeRates(
   tripId: string,
   rates: {

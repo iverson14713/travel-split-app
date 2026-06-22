@@ -6,6 +6,7 @@ import { Button } from '../ui/Button'
 import { ExpenseDetailModal } from './ExpenseDetailModal'
 import { ExpenseUpsertModal } from './ExpenseUpsertModal'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
+import { FreeAppRecommendation } from './FreeAppRecommendation'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 
@@ -120,6 +121,8 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgrade
           ))}
         </div>
       )}
+
+      <FreeAppRecommendation trip={trip} />
 
       <ExpenseDetailModal
         open={selectedExpense != null}

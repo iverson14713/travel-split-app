@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { TRIP_UNLOCK_PRICE_LABEL } from '../../constants/freeLimits'
+import { TRIP_UNLOCK_PRICE_LABEL, UPGRADE_FEATURES } from '../../constants/freeLimits'
 import {
   getTripUsageLimits,
   getUpgradeLeadCopy,
@@ -22,8 +22,6 @@ interface UpgradeModalProps {
   onUnlocked?: () => void
   onUnlockAndProceed?: () => void | Promise<void>
 }
-
-const FEATURES = ['不限成員數', '不限行程天數', '不限記帳筆數', '完整統計與結算']
 
 export function UpgradeModal({
   open,
@@ -73,7 +71,7 @@ export function UpgradeModal({
         <p className="upgrade-lead">{getUpgradeLeadCopy(reason)}</p>
 
         <ul className="upgrade-features">
-          {FEATURES.map((item) => (
+          {UPGRADE_FEATURES.map((item) => (
             <li key={item}>・{item}</li>
           ))}
         </ul>

@@ -11,6 +11,7 @@ import { Select } from '../ui/Select'
 import { Modal } from '../ui/Modal'
 import { Card } from '../ui/Card'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
+import { FreeAppRecommendation } from './FreeAppRecommendation'
 
 interface ItineraryTabProps {
   trip: Trip
@@ -190,6 +191,8 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
           </div>
         )}
       </section>
+
+      <FreeAppRecommendation trip={trip} />
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="新增行程">
         <div className="form">
