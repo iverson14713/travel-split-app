@@ -347,6 +347,38 @@ export async function addItineraryItem(input: {
   await touchTripActivity(input.tripId)
 }
 
+export async function addItineraryItemsBatch(input: {
+  tripId: string
+  items: Array<{
+    dayIndex: number
+    time: string
+    title: string
+    location: string
+    note: string
+  }>
+  createdBy?: string
+}): Promise<void> {
+  if (input.items.length === 0) return
+
+  const db = requireSupabase()
+
+  const rows = input.items.map((item) => ({
+    trip_id: input.tripId,
+    day_index: item.dayIndex,
+    time: item.time || null,
+    title: item.title,
+    location: item.location || null,
+    note: item.note || null,
+    created_by: input.createdBy ?? null,
+  }))
+
+  const { error } = await db.from(DB_TABLES.itineraryItems).insert(rows)
+
+  if (error) throw error
+  await reviveTripIfArchived(input.tripId)
+  await touchTripActivity(input.tripId)
+}
+
 export async function updateItineraryItem(
   itemId: string,
   input: {

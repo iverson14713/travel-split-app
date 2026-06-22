@@ -13,6 +13,7 @@ import { Card } from '../ui/Card'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
 import { ItineraryDetailModal } from './ItineraryDetailModal'
+import { ItineraryImportModal } from './ItineraryImportModal'
 import { TripEndedModal } from './TripEndedModal'
 import type { ItineraryItem } from '../../types'
 import {
@@ -38,6 +39,7 @@ function getDefaultActiveDay(days: ReturnType<typeof getTripDays>, itinerary: Tr
 export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEditBlocked }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
   const [showModal, setShowModal] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
   const [selectedDay, setSelectedDay] = useState(1)
   const [time, setTime] = useState('')
   const [title, setTitle] = useState('')
@@ -96,6 +98,15 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
     setSelectedDay(day)
     resetForm()
     setShowModal(true)
+  }
+
+  const openImport = () => {
+    if (isEnded) {
+      onEditBlocked?.()
+      setShowEndedModal(true)
+      return
+    }
+    setShowImportModal(true)
   }
 
   const handleChipClick = (day: number) => {
@@ -186,9 +197,14 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
             </p>
           </div>
           {canEdit && !isArchived && (
-            <Button size="sm" variant="ghost" onClick={() => openAdd(activeDay)}>
-              + 新增
-            </Button>
+            <div className="day-header-actions">
+              <Button size="sm" variant="ghost" onClick={() => openAdd(activeDay)}>
+                + 新增
+              </Button>
+              <Button size="sm" variant="ghost" onClick={openImport}>
+                匯入
+              </Button>
+            </div>
           )}
         </div>
 
@@ -239,6 +255,20 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
       <TripEndedModal
         open={showEndedModal}
         onClose={() => setShowEndedModal(false)}
+      />
+
+      <ItineraryImportModal
+        open={showImportModal}
+        onClose={() => setShowImportModal(false)}
+        trip={trip}
+        tripId={tripId}
+        memberId={memberId}
+        onImported={async (firstDayIndex) => {
+          if (firstDayIndex != null) {
+            setActiveDay(firstDayIndex)
+          }
+          await onReload({ silent: true })
+        }}
       />
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="新增行程">
