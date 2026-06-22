@@ -67,6 +67,7 @@ export function recordRecentTrip(
     endDate: entry.endDate ?? existing?.endDate,
     memberCount: entry.memberCount ?? existing?.memberCount,
     unlocked: entry.unlocked ?? existing?.unlocked,
+    archivedAt: entry.archivedAt ?? existing?.archivedAt,
   }
 
   const others = getRecentTrips().filter((t) => t.tripCode !== normalized.tripCode)
@@ -92,7 +93,16 @@ export function updateRecentTripStatus(tripCode: string, status: TripStatus): vo
   if (!trips.some((t) => t.tripCode === normalizedCode)) return
 
   const updated = trips.map((t) =>
-    t.tripCode === normalizedCode ? { ...t, status } : t,
+    t.tripCode === normalizedCode
+      ? {
+          ...t,
+          status,
+          archivedAt:
+            status === 'archived'
+              ? t.archivedAt ?? new Date().toISOString()
+              : undefined,
+        }
+      : t,
   )
   localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
 }

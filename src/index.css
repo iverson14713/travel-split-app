@@ -207,6 +207,12 @@ textarea {
   border-color: #b8e6cf;
 }
 
+.home-trip-badge--upcoming {
+  background: #eef4ff;
+  color: #3564b8;
+  border-color: #c5d8f7;
+}
+
 .home-trip-badge--ended {
   background: #fff4e5;
   color: #9a6700;
@@ -236,6 +242,16 @@ textarea {
   border-color: #b8cff5;
 }
 
+.home-trip-badge--unlocked-sm {
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  background: #e8f0ff;
+  color: #2f5fd0;
+  border: 1px solid #b8cff5;
+}
+
 .home-trip-badge--expired {
   background: #f3f3f3;
   color: #888;
@@ -262,6 +278,124 @@ textarea {
 
 .home-section--collapsible {
   gap: 0.5rem;
+}
+
+.home-trip-list--compact {
+  gap: 0.5rem;
+}
+
+.home-trip-card--compact {
+  flex-direction: row;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.home-trip-card--compact:hover {
+  border-color: var(--color-primary-light);
+  box-shadow: 0 4px 14px var(--color-shadow);
+}
+
+.home-trip-card--compact:active {
+  border-color: var(--color-primary-light);
+}
+
+.home-trip-card--expired.home-trip-card--compact {
+  cursor: default;
+  opacity: 0.82;
+}
+
+.home-trip-card-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.home-trip-badges {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  flex-wrap: wrap;
+}
+
+.home-trip-meta--compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.65rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+.home-trip-retention--compact {
+  font-size: 0.75rem;
+  margin-top: 0.05rem;
+}
+
+.home-trip-unlock-link {
+  align-self: flex-start;
+  margin-top: 0.15rem;
+  padding: 0;
+  border: none;
+  background: none;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.home-trip-card-chevron {
+  flex-shrink: 0;
+  font-size: 1.25rem;
+  line-height: 1;
+  color: var(--color-text-muted);
+}
+
+.home-section-more {
+  width: 100%;
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+  background: transparent;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  cursor: pointer;
+}
+
+.home-section--actions {
+  gap: 0.65rem;
+}
+
+.home-action-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.55rem;
+}
+
+.home-action-link {
+  display: block;
+  text-decoration: none;
+}
+
+.home-join-form {
+  margin-top: 0.25rem;
+}
+
+.home-empty-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.home-section--empty {
+  gap: 0.85rem;
 }
 
 .home-section-toggle {
@@ -800,6 +934,11 @@ textarea {
 .trip-badge--ended {
   background: rgba(255, 244, 229, 0.22);
   border-color: rgba(255, 220, 160, 0.45);
+}
+
+.trip-badge--upcoming {
+  background: rgba(238, 244, 255, 0.22);
+  border-color: rgba(180, 200, 247, 0.45);
 }
 
 .trip-destination,

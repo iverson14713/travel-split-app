@@ -9,6 +9,7 @@ import { getActiveMemberCount, isActiveMember } from '../utils/members'
 import { getShareLink } from '../utils/tripCode'
 import {
   getTripLifecyclePhase,
+  isTripUpcoming,
   TRIP_ENDED_VIEW_HINT,
 } from '../utils/tripLifecycle'
 import { isFreeTripRetentionExpired } from '../utils/tripRetention'
@@ -82,6 +83,7 @@ export function TripRoomPage() {
       endDate: trip.endDate,
       memberCount: getActiveMemberCount(trip.members),
       unlocked: isTripUnlocked(trip.id),
+      archivedAt: trip.archivedAt,
     })
   }, [trip, currentMember])
 
@@ -212,6 +214,7 @@ export function TripRoomPage() {
   const tripPhase = getTripLifecyclePhase(trip)
   const isArchived = trip.status === 'archived'
   const isEnded = tripPhase === 'ended'
+  const isUpcoming = isTripUpcoming(trip)
   const activeMemberCount = getActiveMemberCount(trip.members)
   const isHost = currentMember?.isHost === true
 
@@ -238,6 +241,7 @@ export function TripRoomPage() {
               </h1>
               {trip.status === 'archived' && <span className="trip-badge">已封存</span>}
               {isEnded && <span className="trip-badge trip-badge--ended">已結束</span>}
+              {isUpcoming && <span className="trip-badge trip-badge--upcoming">即將開始</span>}
             </div>
             <div className="trip-header-actions">
               <SyncIndicator visible={refreshing} />
