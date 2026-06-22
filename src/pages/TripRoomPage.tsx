@@ -20,6 +20,7 @@ import { ArchivedTripBanner } from '../components/trip/ArchivedTripBanner'
 import { UpgradeModal } from '../components/trip/UpgradeModal'
 import { TripMembersModal } from '../components/trip/TripMembersModal'
 import { DeveloperModeModal } from '../components/trip/DeveloperModeModal'
+import { DeveloperVerifyModal } from '../components/trip/DeveloperVerifyModal'
 import type { UpgradeReason } from '../services/tripUnlockService'
 
 type Tab = 'itinerary' | 'expenses' | 'overview' | 'settlement'
@@ -42,6 +43,8 @@ export function TripRoomPage() {
   const [statusToast, setStatusToast] = useState<string | null>(null)
   const [showSettings, setShowSettings] = useState(false)
   const [titleTapCount, setTitleTapCount] = useState(0)
+  const [developerAccessGranted, setDeveloperAccessGranted] = useState(false)
+  const [showDeveloperVerify, setShowDeveloperVerify] = useState(false)
   const [showDeveloperModal, setShowDeveloperModal] = useState(false)
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
@@ -93,11 +96,21 @@ export function TripRoomPage() {
     setTitleTapCount((count) => {
       const next = count + 1
       if (next >= 7) {
-        setShowDeveloperModal(true)
+        if (developerAccessGranted) {
+          setShowDeveloperModal(true)
+        } else {
+          setShowDeveloperVerify(true)
+        }
         return 0
       }
       return next
     })
+  }
+
+  const handleDeveloperVerified = () => {
+    setDeveloperAccessGranted(true)
+    setShowDeveloperVerify(false)
+    setShowDeveloperModal(true)
   }
 
   useEffect(() => {
@@ -307,6 +320,12 @@ export function TripRoomPage() {
         reason={upgradeReason ?? 'manual_unlock'}
         trip={trip}
         onUnlocked={handleUnlockChanged}
+      />
+
+      <DeveloperVerifyModal
+        open={showDeveloperVerify}
+        onClose={() => setShowDeveloperVerify(false)}
+        onVerified={handleDeveloperVerified}
       />
 
       <DeveloperModeModal
