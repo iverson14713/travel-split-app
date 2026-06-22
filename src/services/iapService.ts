@@ -1,3 +1,4 @@
+import { TRIP_UNLOCK_PRICE_LABEL } from '../constants/freeLimits'
 import { setTripPurchasedUnlocked } from './tripUnlockService'
 
 /** iOS App Store 非消耗型商品 ID（正式 IAP 串接時使用） */
@@ -27,6 +28,33 @@ const IAP_NOT_AVAILABLE_MESSAGE =
 /** 正式 StoreKit / Capacitor IAP 是否已串接 */
 export function isIapAvailable(): boolean {
   return false
+}
+
+export interface StoreKitProduct {
+  productId: string
+  localizedPrice: string
+}
+
+/**
+ * 向 StoreKit 取得商品資訊（含在地化價格字串）。
+ * 正式 IAP 串接時實作 Capacitor In-App Purchase getProducts()。
+ */
+export async function fetchStoreKitProduct(
+  productId: string,
+): Promise<StoreKitProduct | null> {
+  // TODO: Capacitor In-App Purchase getProducts([productId])
+  void productId
+  return null
+}
+
+/** 取得單趟解鎖商品的顯示價格；IAP 未串接時回傳 TRIP_UNLOCK_PRICE_LABEL */
+export async function fetchTripUnlockProductPriceLabel(): Promise<string> {
+  if (!isIapAvailable()) {
+    return TRIP_UNLOCK_PRICE_LABEL
+  }
+
+  const product = await fetchStoreKitProduct(IOS_TRIP_UNLOCK_PRODUCT_ID)
+  return product?.localizedPrice ?? TRIP_UNLOCK_PRICE_LABEL
 }
 
 /**

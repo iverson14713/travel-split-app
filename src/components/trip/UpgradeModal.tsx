@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
-import { TRIP_UNLOCK_PRICE_LABEL, UPGRADE_FEATURES } from '../../constants/freeLimits'
+import { UPGRADE_FEATURES } from '../../constants/freeLimits'
+import { useTripUnlockPriceLabel } from '../../hooks/useTripUnlockPriceLabel'
 import {
   getTripUsageLimits,
   getUpgradeLeadCopy,
@@ -32,6 +33,7 @@ export function UpgradeModal({
   onUnlockAndProceed,
 }: UpgradeModalProps) {
   const [processing, setProcessing] = useState(false)
+  const priceLabel = useTripUnlockPriceLabel()
   const reasonCopy = getUpgradeReasonCopy(reason)
   const usage = useMemo(() => (trip ? getTripUsageLimits(trip) : null), [trip])
   const canMockUnlock = !!trip?.id || !!onUnlockAndProceed
@@ -80,11 +82,11 @@ export function UpgradeModal({
           <FreeUsageHint usage={usage} compact />
         )}
 
-        <p className="upgrade-price">單趟解鎖 {TRIP_UNLOCK_PRICE_LABEL}</p>
+        <p className="upgrade-price">單趟解鎖 {priceLabel}</p>
 
         {canMockUnlock ? (
           <Button fullWidth type="button" onClick={handleMockUnlock} disabled={processing}>
-            {processing ? '處理中...' : `${TRIP_UNLOCK_PRICE_LABEL} 解鎖這趟旅程`}
+            {processing ? '處理中...' : `${priceLabel} 解鎖這趟旅程`}
           </Button>
         ) : (
           <Button fullWidth type="button" disabled>

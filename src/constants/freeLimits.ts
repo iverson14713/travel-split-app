@@ -32,6 +32,7 @@ export const ESTIMATED_MEMBER_OPTIONS: { value: EstimatedMemberCount; label: str
   { value: 5, label: '5 人以上' },
 ]
 
-export const TRIP_UNLOCK_PRICE_LABEL = 'NT$49'
+/** mock / IAP 未串接時的預設顯示價格；正式環境以 StoreKit 回傳為準 */
+export const TRIP_UNLOCK_PRICE_LABEL = 'NT$60'
 
 export const DEVELOPER_UNLOCK_CODE = 'A126452345'
