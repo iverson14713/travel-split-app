@@ -6,10 +6,12 @@ import {
   type EstimatedMemberCount,
 } from '../constants/freeLimits'
 import type { Trip } from '../types'
+import { addDaysToDateString, formatDisplayDate, getTripDays } from '../utils/dates'
 import { getActiveMemberCount } from '../utils/members'
-import { getTripDays } from '../utils/dates'
 
 export type TripUnlockStatus = 'free' | 'unlocked' | 'developer_unlocked'
+
+export type TripUnlockSource = 'mock' | 'ios_iap' | 'developer'
 
 export type UpgradeReason =
   | 'member_limit'
@@ -20,6 +22,19 @@ export type UpgradeReason =
   | 'manual_unlock'
 
 export type TripUnlockOverride = 'free' | 'unlocked'
+
+export type TripDateValidationResult =
+  | { ok: true }
+  | { ok: false; reason: 'too_long' }
+  | { ok: false; reason: 'upgrade_required'; upgradeReason: UpgradeReason }
+  | { ok: false; reason: 'exceeds_unlock_window'; maxEndDate: string }
+
+export interface TripUnlockWindow {
+  unlockBaseStartDate: string
+  maxEndDate: string
+  unlockedAt: string
+  source: TripUnlockSource
+}
 
 const STORAGE_PREFIX = 'travel_split_'
 
@@ -44,6 +59,22 @@ function writeBool(key: string, value: boolean): void {
   }
 }
 
+function readString(key: string): string | null {
+  try {
+    return localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
+function writeString(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value)
+  } catch {
+    // ignore
+  }
+}
+
 function readOverride(tripId: string): TripUnlockOverride | null {
   try {
     const raw = localStorage.getItem(storageKey(`trip_unlock_override_${tripId}`))
@@ -52,6 +83,97 @@ function readOverride(tripId: string): TripUnlockOverride | null {
   } catch {
     return null
   }
+}
+
+export function computeMaxEndDate(unlockBaseStartDate: string): string {
+  return addDaysToDateString(unlockBaseStartDate, ABSOLUTE_MAX_TRIP_DAYS - 1)
+}
+
+export function formatUnlockMaxEndDate(maxEndDate: string): string {
+  return formatDisplayDate(maxEndDate)
+}
+
+export function getTripUnlockWindow(tripId: string): TripUnlockWindow | null {
+  const unlockBaseStartDate = readString(storageKey(`trip_unlock_base_start_${tripId}`))
+  const maxEndDate = readString(storageKey(`trip_unlock_max_end_${tripId}`))
+  if (!unlockBaseStartDate || !maxEndDate) return null
+
+  const sourceRaw = readString(storageKey(`trip_unlock_source_${tripId}`))
+  const source: TripUnlockSource =
+    sourceRaw === 'ios_iap' || sourceRaw === 'developer' || sourceRaw === 'mock'
+      ? sourceRaw
+      : 'mock'
+
+  return {
+    unlockBaseStartDate,
+    maxEndDate,
+    unlockedAt: readString(storageKey(`trip_unlocked_at_${tripId}`)) ?? '',
+    source,
+  }
+}
+
+export function recordTripUnlockWindow(
+  tripId: string,
+  unlockBaseStartDate: string,
+  source: TripUnlockSource,
+): void {
+  if (getTripUnlockWindow(tripId)) return
+
+  const maxEndDate = computeMaxEndDate(unlockBaseStartDate)
+  writeString(storageKey(`trip_unlock_base_start_${tripId}`), unlockBaseStartDate)
+  writeString(storageKey(`trip_unlock_max_end_${tripId}`), maxEndDate)
+  writeString(storageKey(`trip_unlock_source_${tripId}`), source)
+  writeString(storageKey(`trip_unlocked_at_${tripId}`), new Date().toISOString())
+}
+
+export function inferTripUnlockSource(tripId: string): TripUnlockSource {
+  const existing = getTripUnlockWindow(tripId)?.source
+  if (existing) return existing
+  if (isTripPurchasedUnlocked(tripId)) return 'ios_iap'
+  if (getEffectiveTripUnlockStatus(tripId) === 'developer_unlocked') return 'developer'
+  return 'mock'
+}
+
+export function resolveTripUnlockWindow(
+  tripId: string,
+  fallbackStartDate: string,
+): TripUnlockWindow {
+  const existing = getTripUnlockWindow(tripId)
+  if (existing) return existing
+
+  const unlockBaseStartDate = fallbackStartDate
+  return {
+    unlockBaseStartDate,
+    maxEndDate: computeMaxEndDate(unlockBaseStartDate),
+    unlockedAt: '',
+    source: inferTripUnlockSource(tripId),
+  }
+}
+
+export function ensureTripUnlockWindow(
+  tripId: string,
+  fallbackStartDate: string,
+  source?: TripUnlockSource,
+): TripUnlockWindow {
+  const existing = getTripUnlockWindow(tripId)
+  if (existing) return existing
+
+  if (isTripUnlocked(tripId)) {
+    recordTripUnlockWindow(tripId, fallbackStartDate, source ?? inferTripUnlockSource(tripId))
+    return getTripUnlockWindow(tripId)!
+  }
+
+  return resolveTripUnlockWindow(tripId, fallbackStartDate)
+}
+
+export function exceedsUnlockWindow(
+  startDate: string,
+  endDate: string,
+  window: TripUnlockWindow,
+): boolean {
+  if (endDate > window.maxEndDate) return true
+  if (startDate > window.maxEndDate) return true
+  return false
 }
 
 export function getDeveloperGlobalUnlock(): boolean {
@@ -89,12 +211,20 @@ export function isTripPurchasedUnlocked(tripId: string): boolean {
 }
 
 /** Reserved for future IAP – not used by mock unlock */
-export function setTripPurchasedUnlocked(tripId: string, unlocked: boolean): void {
+export function setTripPurchasedUnlocked(
+  tripId: string,
+  unlocked: boolean,
+  unlockBaseStartDate?: string,
+): void {
   writeBool(storageKey(`trip_purchased_unlock_${tripId}`), unlocked)
+  if (unlocked && unlockBaseStartDate) {
+    recordTripUnlockWindow(tripId, unlockBaseStartDate, 'ios_iap')
+  }
 }
 
-export function mockUnlockTrip(tripId: string): void {
+export function mockUnlockTrip(tripId: string, unlockBaseStartDate: string): void {
   setTripMockUnlocked(tripId, true)
+  recordTripUnlockWindow(tripId, unlockBaseStartDate, 'mock')
 }
 
 export function getEffectiveTripUnlockStatus(tripId: string): TripUnlockStatus {
@@ -128,6 +258,7 @@ export interface TripUsageSnapshot {
   maxExpenses: number
   isUnlimited: boolean
   status: TripUnlockStatus
+  unlockMaxEndDate?: string
 }
 
 export function exceedsAbsoluteMaxDays(startDate: string, endDate: string): boolean {
@@ -137,6 +268,9 @@ export function exceedsAbsoluteMaxDays(startDate: string, endDate: string): bool
 export function getTripUsageLimits(trip: Trip): TripUsageSnapshot {
   const status = getEffectiveTripUnlockStatus(trip.id)
   const isUnlimited = status !== 'free'
+  const unlockWindow = isUnlimited
+    ? ensureTripUnlockWindow(trip.id, trip.startDate, inferTripUnlockSource(trip.id))
+    : null
 
   return {
     members: getActiveMemberCount(trip.members),
@@ -147,7 +281,38 @@ export function getTripUsageLimits(trip: Trip): TripUsageSnapshot {
     maxExpenses: isUnlimited ? Infinity : FREE_LIMITS.maxExpenses,
     isUnlimited,
     status,
+    unlockMaxEndDate: unlockWindow?.maxEndDate,
   }
+}
+
+export function validateTripDates(
+  startDate: string,
+  endDate: string,
+  context?: { tripId?: string; fallbackBaseStartDate?: string },
+): TripDateValidationResult {
+  if (exceedsAbsoluteMaxDays(startDate, endDate)) {
+    return { ok: false, reason: 'too_long' }
+  }
+
+  const tripId = context?.tripId
+  if (tripId && isTripUnlocked(tripId)) {
+    const window = ensureTripUnlockWindow(
+      tripId,
+      context?.fallbackBaseStartDate ?? startDate,
+      inferTripUnlockSource(tripId),
+    )
+    if (exceedsUnlockWindow(startDate, endDate, window)) {
+      return { ok: false, reason: 'exceeds_unlock_window', maxEndDate: window.maxEndDate }
+    }
+    return { ok: true }
+  }
+
+  const dayBlocked = checkDayLimit(startDate, endDate, tripId)
+  if (dayBlocked) {
+    return { ok: false, reason: 'upgrade_required', upgradeReason: dayBlocked }
+  }
+
+  return { ok: true }
 }
 
 export function shouldShowUpgrade(reason: UpgradeReason, tripId: string): boolean {

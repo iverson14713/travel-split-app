@@ -14,8 +14,8 @@ import { useRemoveMember } from '../../hooks/useRemoveMember'
 import { useTripUnlock } from '../../hooks/useTripUnlock'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 import {
-  checkDayLimit,
-  exceedsAbsoluteMaxDays,
+  formatUnlockMaxEndDate,
+  validateTripDates,
 } from '../../services/tripUnlockService'
 import { FREE_LIMITS } from '../../constants/freeLimits'
 import { ExchangeRateSettings } from './ExchangeRateSettings'
@@ -26,6 +26,7 @@ import { ActiveMemberList } from './ActiveMemberList'
 import { RemoveMemberConfirmModal } from './RemoveMemberConfirmModal'
 import { RestorePurchasesButton } from './RestorePurchasesButton'
 import { TripTooLongModal } from './TripTooLongModal'
+import { TripUnlockWindowExceededModal } from './TripUnlockWindowExceededModal'
 import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { updateRecentTripStatus } from '../../utils/storage'
@@ -64,6 +65,7 @@ export function SettingsPanel({
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showTooLongModal, setShowTooLongModal] = useState(false)
+  const [unlockWindowMaxEndDate, setUnlockWindowMaxEndDate] = useState<string | null>(null)
   const [tripStartDate, setTripStartDate] = useState(trip.startDate)
   const [tripEndDate, setTripEndDate] = useState(trip.endDate)
   const [savingDates, setSavingDates] = useState(false)
@@ -114,13 +116,19 @@ export function SettingsPanel({
       setDateError('結束日期不能早於開始日期')
       return
     }
-    if (exceedsAbsoluteMaxDays(tripStartDate, tripEndDate)) {
-      setShowTooLongModal(true)
-      return
-    }
-    const dayBlocked = checkDayLimit(tripStartDate, tripEndDate, tripId)
-    if (dayBlocked) {
-      onUpgradeRequired?.(dayBlocked)
+
+    const dateValidation = validateTripDates(tripStartDate, tripEndDate, {
+      tripId,
+      fallbackBaseStartDate: trip.startDate,
+    })
+    if (!dateValidation.ok) {
+      if (dateValidation.reason === 'too_long') {
+        setShowTooLongModal(true)
+      } else if (dateValidation.reason === 'exceeds_unlock_window') {
+        setUnlockWindowMaxEndDate(dateValidation.maxEndDate)
+      } else {
+        onUpgradeRequired?.(dateValidation.upgradeReason)
+      }
       return
     }
 
@@ -280,8 +288,13 @@ export function SettingsPanel({
               {savingDates ? '儲存中...' : '儲存日期'}
             </Button>
             {isArchived && <p className="settings-hint">已封存旅行無法修改日期</p>}
-            {!isArchived && (
-              <p className="settings-hint">免費版最多 5 天；解鎖後最多 30 天。</p>
+            {!isArchived && !usage?.isUnlimited && (
+              <p className="settings-hint">免費版最多 5 天；解鎖後此趟旅程最多 30 天。</p>
+            )}
+            {!isArchived && usage?.isUnlimited && usage.unlockMaxEndDate && (
+              <p className="settings-hint">
+                此旅程已解鎖，最多可設定至 {formatUnlockMaxEndDate(usage.unlockMaxEndDate)}。
+              </p>
             )}
           </Card>
         </section>
@@ -437,6 +450,12 @@ export function SettingsPanel({
       </section>
 
       <TripTooLongModal open={showTooLongModal} onClose={() => setShowTooLongModal(false)} />
+
+      <TripUnlockWindowExceededModal
+        open={unlockWindowMaxEndDate != null}
+        maxEndDate={unlockWindowMaxEndDate ?? ''}
+        onClose={() => setUnlockWindowMaxEndDate(null)}
+      />
 
       <RemoveMemberConfirmModal
         member={memberToRemove}

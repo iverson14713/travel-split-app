@@ -52,8 +52,8 @@ export function UpgradeModal({
       }
       return
     }
-    if (!trip?.id) return
-    mockUnlockTrip(trip.id)
+    if (!trip?.id || !trip.startDate) return
+    mockUnlockTrip(trip.id, trip.startDate)
     onUnlocked?.()
     onClose()
   }

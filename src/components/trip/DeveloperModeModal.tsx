@@ -4,6 +4,7 @@ import {
   getDeveloperGlobalUnlock,
   getEffectiveTripUnlockStatus,
   getTripUnlockOverride,
+  recordTripUnlockWindow,
   setDeveloperGlobalUnlock,
   setTripUnlockOverride,
   type TripUnlockStatus,
@@ -16,10 +17,17 @@ interface DeveloperModeModalProps {
   open: boolean
   onClose: () => void
   tripId: string
+  tripStartDate: string
   onChanged: () => void
 }
 
-export function DeveloperModeModal({ open, onClose, tripId, onChanged }: DeveloperModeModalProps) {
+export function DeveloperModeModal({
+  open,
+  onClose,
+  tripId,
+  tripStartDate,
+  onChanged,
+}: DeveloperModeModalProps) {
   const [code, setCode] = useState('')
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
@@ -59,6 +67,7 @@ export function DeveloperModeModal({ open, onClose, tripId, onChanged }: Develop
 
   const handleSimulateUnlocked = () => {
     setTripUnlockOverride(tripId, 'unlocked')
+    recordTripUnlockWindow(tripId, tripStartDate, 'developer')
     setOverride('unlocked')
     setNotice('已模擬此旅程已解鎖')
     onChanged()

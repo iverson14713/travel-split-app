@@ -35,6 +35,21 @@ export function formatDateRange(startDate: string, endDate: string): string {
   return `${fmt(startDate)} – ${fmt(endDate)}`
 }
 
+export function addDaysToDateString(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const date = new Date(y, m - 1, d)
+  date.setDate(date.getDate() + days)
+  const yy = date.getFullYear()
+  const mm = String(date.getMonth() + 1).padStart(2, '0')
+  const dd = String(date.getDate()).padStart(2, '0')
+  return `${yy}-${mm}-${dd}`
+}
+
+export function formatDisplayDate(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return `${y}年${m}月${d}日`
+}
+
 export function formatDateTime(iso: string): string {
   const date = new Date(iso)
   if (Number.isNaN(date.getTime())) return iso

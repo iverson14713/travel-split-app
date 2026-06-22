@@ -10,6 +10,9 @@ export interface TripUnlockRecord {
   product_id: string
   platform: 'ios'
   unlocked_at: string
+  unlock_base_start_date?: string
+  max_end_date?: string
+  source?: 'mock' | 'ios_iap' | 'developer'
 }
 
 export type RestorePurchasesResult =
@@ -35,7 +38,7 @@ export function applyRestoredUnlockRecords(records: TripUnlockRecord[]): string[
 
   for (const record of records) {
     if (!record.trip_id) continue
-    setTripPurchasedUnlocked(record.trip_id, true)
+    setTripPurchasedUnlocked(record.trip_id, true, record.unlock_base_start_date)
     restoredTripIds.push(record.trip_id)
   }
 
@@ -52,6 +55,9 @@ export function applyRestoredUnlockRecords(records: TripUnlockRecord[]): string[
  * - product_id
  * - platform ('ios')
  * - unlocked_at
+ * - unlock_base_start_date
+ * - max_end_date
+ * - source ('mock' | 'ios_iap' | 'developer')
  */
 export async function fetchTripUnlocksByTransactions(
   _transactionIds: string[],

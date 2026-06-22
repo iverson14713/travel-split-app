@@ -6,12 +6,12 @@ import { Input } from '../components/ui/Input'
 import { Card } from '../components/ui/Card'
 import { UpgradeModal } from '../components/trip/UpgradeModal'
 import { TripTooLongModal } from '../components/trip/TripTooLongModal'
+import { TripUnlockWindowExceededModal } from '../components/trip/TripUnlockWindowExceededModal'
 import { createTrip } from '../services/tripService'
 import {
   checkCreateMemberPlan,
-  checkDayLimit,
-  exceedsAbsoluteMaxDays,
   mockUnlockTrip,
+  validateTripDates,
 } from '../services/tripUnlockService'
 import type { UpgradeReason } from '../services/tripUnlockService'
 import {
@@ -44,6 +44,7 @@ export function CreateTripPage() {
   const [submitting, setSubmitting] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
   const [showTooLongModal, setShowTooLongModal] = useState(false)
+  const [unlockWindowMaxEndDate, setUnlockWindowMaxEndDate] = useState<string | null>(null)
 
   const executeCreate = async (unlockAfterCreate = false) => {
     setSubmitting(true)
@@ -64,7 +65,7 @@ export function CreateTripPage() {
       })
 
       if (unlockAfterCreate) {
-        mockUnlockTrip(trip.id)
+        mockUnlockTrip(trip.id, startDate)
       }
 
       setSession({ tripCode: trip.code, memberId })
@@ -103,14 +104,15 @@ export function CreateTripPage() {
       return
     }
 
-    if (exceedsAbsoluteMaxDays(startDate, endDate)) {
-      setShowTooLongModal(true)
-      return
-    }
-
-    const dayBlocked = checkDayLimit(startDate, endDate)
-    if (dayBlocked) {
-      setUpgradeReason(dayBlocked)
+    const dateValidation = validateTripDates(startDate, endDate)
+    if (!dateValidation.ok) {
+      if (dateValidation.reason === 'too_long') {
+        setShowTooLongModal(true)
+      } else if (dateValidation.reason === 'exceeds_unlock_window') {
+        setUnlockWindowMaxEndDate(dateValidation.maxEndDate)
+      } else {
+        setUpgradeReason(dateValidation.upgradeReason)
+      }
       return
     }
 
@@ -283,6 +285,12 @@ export function CreateTripPage() {
         />
 
         <TripTooLongModal open={showTooLongModal} onClose={() => setShowTooLongModal(false)} />
+
+        <TripUnlockWindowExceededModal
+          open={unlockWindowMaxEndDate != null}
+          maxEndDate={unlockWindowMaxEndDate ?? ''}
+          onClose={() => setUnlockWindowMaxEndDate(null)}
+        />
       </div>
     </Layout>
   )

@@ -313,6 +313,7 @@ export function TripRoomPage() {
         open={showDeveloperModal}
         onClose={() => setShowDeveloperModal(false)}
         tripId={trip.id}
+        tripStartDate={trip.startDate}
         onChanged={handleUnlockChanged}
       />
     </Layout>
