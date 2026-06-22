@@ -94,7 +94,9 @@ export function UpgradeModal({
           </Button>
         )}
 
-        <p className="upgrade-footnote">只解鎖目前這趟旅程，不是訂閱。</p>
+        <p className="upgrade-footnote">
+          只解鎖目前這趟旅程，不是訂閱。旅程結束後資料仍可查看與結算。
+        </p>
 
         <RestorePurchasesButton
           className="restore-purchases restore-purchases--modal"

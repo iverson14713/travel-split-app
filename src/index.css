@@ -198,16 +198,35 @@ textarea {
   font-weight: 700;
   padding: 0.12rem 0.45rem;
   border-radius: 999px;
+  border: 1px solid var(--color-border);
+}
+
+.home-trip-badge--active {
+  background: #e8f5ef;
+  color: #1f7a4f;
+  border-color: #b8e6cf;
+}
+
+.home-trip-badge--ended {
+  background: #fff4e5;
+  color: #9a6700;
+  border-color: #f0d49a;
+}
+
+.home-trip-badge--archived {
   background: var(--color-bg-warm);
   color: var(--color-text-muted);
-  border: 1px solid var(--color-border);
 }
 
 .home-trip-card--archived {
   opacity: 0.92;
 }
 
-.home-section--archived {
+.home-trip-card--ended {
+  opacity: 0.98;
+}
+
+.home-section--collapsible {
   gap: 0.5rem;
 }
 
@@ -523,6 +542,11 @@ textarea {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
+.card[role='button']:hover {
+  border-color: var(--color-primary-light);
+  box-shadow: 0 4px 16px var(--color-shadow);
+}
+
 .card[role='button']:active {
   border-color: var(--color-primary-light);
   box-shadow: 0 1px 6px var(--color-shadow);
@@ -737,6 +761,11 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.35);
   color: white;
   letter-spacing: 0.04em;
+}
+
+.trip-badge--ended {
+  background: rgba(255, 244, 229, 0.22);
+  border-color: rgba(255, 220, 160, 0.45);
 }
 
 .trip-destination,
@@ -1235,6 +1264,17 @@ textarea {
   margin-top: 0.25rem;
 }
 
+.itinerary-detail-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.itinerary-detail-actions > :last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
 /* Expense */
 .expense-list {
   display: flex;
@@ -1363,6 +1403,12 @@ textarea {
   font-size: 0.85rem;
   color: var(--color-primary-dark);
   align-items: flex-start;
+}
+
+.archived-hint--compact {
+  margin-top: 0.35rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8rem;
 }
 
 /* Settlement */

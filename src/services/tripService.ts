@@ -347,6 +347,44 @@ export async function addItineraryItem(input: {
   await touchTripActivity(input.tripId)
 }
 
+export async function updateItineraryItem(
+  itemId: string,
+  input: {
+    tripId: string
+    dayIndex: number
+    time: string
+    title: string
+    location: string
+    note: string
+  },
+): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db
+    .from(DB_TABLES.itineraryItems)
+    .update({
+      day_index: input.dayIndex,
+      time: input.time || null,
+      title: input.title,
+      location: input.location || null,
+      note: input.note || null,
+    })
+    .eq('id', itemId)
+
+  if (error) throw error
+  await reviveTripIfArchived(input.tripId)
+  await touchTripActivity(input.tripId)
+}
+
+export async function deleteItineraryItem(itemId: string, tripId: string): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db.from(DB_TABLES.itineraryItems).delete().eq('id', itemId)
+
+  if (error) throw error
+  await touchTripActivity(tripId)
+}
+
 export async function addExpense(input: {
   tripId: string
   type: ExpenseType

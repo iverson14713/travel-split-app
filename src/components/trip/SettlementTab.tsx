@@ -11,6 +11,11 @@ import type { ReloadOptions } from '../../hooks/useTrip'
 import { ExpenseUpsertModal, type ExpenseUpsertModalPreset } from './ExpenseUpsertModal'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
+import {
+  canRecordRepayment,
+  getTripLifecyclePhase,
+  TRIP_ENDED_VIEW_HINT,
+} from '../../utils/tripLifecycle'
 
 interface SettlementTabProps {
   trip: Trip
@@ -38,6 +43,8 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
   const hasAnyExpense = trip.expenses.length > 0
   const hasAnySettlement = settlementItems.length > 0
   const isArchived = trip.status === 'archived'
+  const isEnded = getTripLifecyclePhase(trip) === 'ended'
+  const canRepay = canRecordRepayment(trip)
 
   return (
     <div className="tab-panel">
@@ -45,6 +52,12 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
         <div className="archived-hint">
           <span>📌</span>
           <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
+        </div>
+      )}
+      {isEnded && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>{TRIP_ENDED_VIEW_HINT}</p>
         </div>
       )}
       {!hasAnyExpense ? (
@@ -81,7 +94,7 @@ export function SettlementTab({ trip, tripId, currentMemberId, onReload, onUpgra
                     })
                     setShowRepayModal(true)
                   }}
-                  disabled={isArchived || !item.fromId || !item.toId}
+                  disabled={!canRepay || !item.fromId || !item.toId}
                 >
                   記錄已還款
                 </Button>

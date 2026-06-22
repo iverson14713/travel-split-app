@@ -12,6 +12,14 @@ import { Modal } from '../ui/Modal'
 import { Card } from '../ui/Card'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
+import { ItineraryDetailModal } from './ItineraryDetailModal'
+import { TripEndedModal } from './TripEndedModal'
+import type { ItineraryItem } from '../../types'
+import {
+  canEditTripContent,
+  getTripLifecyclePhase,
+  TRIP_ENDED_VIEW_HINT,
+} from '../../utils/tripLifecycle'
 
 interface ItineraryTabProps {
   trip: Trip
@@ -19,6 +27,7 @@ interface ItineraryTabProps {
   memberId?: string
   canEdit: boolean
   onReload: (options?: ReloadOptions) => Promise<void>
+  onEditBlocked?: () => void
 }
 
 function getDefaultActiveDay(days: ReturnType<typeof getTripDays>, itinerary: Trip['itinerary']): number {
@@ -26,7 +35,7 @@ function getDefaultActiveDay(days: ReturnType<typeof getTripDays>, itinerary: Tr
   return firstWithItems?.day ?? days[0]?.day ?? 1
 }
 
-export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: ItineraryTabProps) {
+export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEditBlocked }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
   const [showModal, setShowModal] = useState(false)
   const [selectedDay, setSelectedDay] = useState(1)
@@ -36,6 +45,8 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [selectedItem, setSelectedItem] = useState<ItineraryItem | null>(null)
+  const [showEndedModal, setShowEndedModal] = useState(false)
   const [activeDay, setActiveDay] = useState(() => getDefaultActiveDay(days, trip.itinerary))
 
   const chipRefs = useRef<Map<number, HTMLButtonElement>>(new Map())
@@ -77,6 +88,11 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   }
 
   const openAdd = (day: number = activeDay) => {
+    if (isEnded) {
+      onEditBlocked?.()
+      setShowEndedModal(true)
+      return
+    }
     setSelectedDay(day)
     resetForm()
     setShowModal(true)
@@ -114,7 +130,8 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
   }
 
   const isArchived = trip.status === 'archived'
-  const canAdd = canEdit && !isArchived
+  const isEnded = getTripLifecyclePhase(trip) === 'ended'
+  const canMutate = canEdit && canEditTripContent(trip)
 
   if (!activeDayInfo) {
     return null
@@ -126,6 +143,12 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
         <div className="archived-hint">
           <span>📌</span>
           <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
+        </div>
+      )}
+      {isEnded && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>{TRIP_ENDED_VIEW_HINT}</p>
         </div>
       )}
 
@@ -162,7 +185,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
               {activeDayInfo.shortDate} {activeDayInfo.weekday} · {activeItems.length} 個行程
             </p>
           </div>
-          {canAdd && (
+          {canEdit && !isArchived && (
             <Button size="sm" variant="ghost" onClick={() => openAdd(activeDay)}>
               + 新增
             </Button>
@@ -173,13 +196,17 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
           <div className="day-empty-state">
             <p className="day-empty-state-title">還沒有行程</p>
             <p className="day-empty-state-hint">
-              {canAdd ? '點「+ 新增」加入第一個行程' : isArchived ? ARCHIVED_VIEW_ONLY_HINT : '目前這天還沒有行程'}
+              {canEdit && !isArchived ? '點「+ 新增」加入第一個行程' : isArchived ? ARCHIVED_VIEW_ONLY_HINT : isEnded ? TRIP_ENDED_VIEW_HINT : '目前這天還沒有行程'}
             </p>
           </div>
         ) : (
           <div className="day-items">
             {activeItems.map((item) => (
-              <Card key={item.id} className="itinerary-card">
+              <Card
+                key={item.id}
+                className="itinerary-card"
+                onClick={() => setSelectedItem(item)}
+              >
                 <div className="itinerary-time">{item.time || '全天'}</div>
                 <div className="itinerary-body">
                   <h4 className="itinerary-title">{item.title}</h4>
@@ -193,6 +220,26 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload }: Itin
       </section>
 
       <FreeAppRecommendation trip={trip} />
+
+      <ItineraryDetailModal
+        open={selectedItem != null}
+        onClose={() => setSelectedItem(null)}
+        item={selectedItem}
+        trip={trip}
+        tripId={tripId}
+        readOnly={!canMutate}
+        onSaved={async (dayIndex) => {
+          if (dayIndex != null) {
+            setActiveDay(dayIndex)
+          }
+          await onReload({ silent: true })
+        }}
+      />
+
+      <TripEndedModal
+        open={showEndedModal}
+        onClose={() => setShowEndedModal(false)}
+      />
 
       <Modal open={showModal} onClose={() => setShowModal(false)} title="新增行程">
         <div className="form">

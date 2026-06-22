@@ -7,8 +7,14 @@ import { ExpenseDetailModal } from './ExpenseDetailModal'
 import { ExpenseUpsertModal } from './ExpenseUpsertModal'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
+import { TripEndedModal } from './TripEndedModal'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import type { UpgradeReason } from '../../services/tripUnlockService'
+import {
+  canEditTripContent,
+  getTripLifecyclePhase,
+  TRIP_ENDED_VIEW_HINT,
+} from '../../utils/tripLifecycle'
 
 interface ExpensesTabProps {
   trip: Trip
@@ -16,6 +22,7 @@ interface ExpensesTabProps {
   currentMemberId?: string
   onReload: (options?: ReloadOptions) => Promise<void>
   onUpgradeRequired?: (reason: UpgradeReason) => void
+  onEditBlocked?: () => void
 }
 
 function ExpenseCompactCard({
@@ -71,21 +78,45 @@ function ExpenseCompactCard({
   )
 }
 
-export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgradeRequired }: ExpensesTabProps) {
+export function ExpensesTab({
+  trip,
+  tripId,
+  currentMemberId,
+  onReload,
+  onUpgradeRequired,
+  onEditBlocked,
+}: ExpensesTabProps) {
   const [showAddModal, setShowAddModal] = useState(false)
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
+  const [showEndedModal, setShowEndedModal] = useState(false)
 
   const sortedExpenses = [...trip.expenses].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   )
 
   const handleEdit = (expense: Expense) => {
+    if (!canEditTripContent(trip)) {
+      onEditBlocked?.()
+      setShowEndedModal(true)
+      return
+    }
     setSelectedExpense(null)
     setEditingExpense(expense)
   }
 
+  const openAddModal = () => {
+    if (!canEditTripContent(trip)) {
+      onEditBlocked?.()
+      setShowEndedModal(true)
+      return
+    }
+    setShowAddModal(true)
+  }
+
   const isArchived = trip.status === 'archived'
+  const isEnded = getTripLifecyclePhase(trip) === 'ended'
+  const readOnly = isArchived || isEnded
 
   return (
     <div className="tab-panel">
@@ -95,10 +126,16 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgrade
           <p>{ARCHIVED_VIEW_ONLY_HINT}</p>
         </div>
       )}
+      {isEnded && (
+        <div className="archived-hint">
+          <span>📌</span>
+          <p>{TRIP_ENDED_VIEW_HINT}</p>
+        </div>
+      )}
       <div className="tab-panel-header">
         <h3 className="tab-panel-title">支出紀錄</h3>
         {!isArchived && (
-          <Button size="sm" onClick={() => setShowAddModal(true)}>
+          <Button size="sm" onClick={openAddModal}>
             + 新增支出
           </Button>
         )}
@@ -131,7 +168,7 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgrade
         trip={trip}
         onEdit={handleEdit}
         onDeleted={onReload}
-        readOnly={isArchived}
+        readOnly={readOnly}
       />
 
       <ExpenseUpsertModal
@@ -155,6 +192,8 @@ export function ExpensesTab({ trip, tripId, currentMemberId, onReload, onUpgrade
         onSaved={onReload}
         onUpgradeRequired={onUpgradeRequired}
       />
+
+      <TripEndedModal open={showEndedModal} onClose={() => setShowEndedModal(false)} />
     </div>
   )
 }

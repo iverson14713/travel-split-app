@@ -7,6 +7,10 @@ import { getSession, recordRecentTrip } from '../utils/storage'
 import { formatDateRange } from '../utils/dates'
 import { getActiveMemberCount, isActiveMember } from '../utils/members'
 import { getShareLink } from '../utils/tripCode'
+import {
+  getTripLifecyclePhase,
+  TRIP_ENDED_VIEW_HINT,
+} from '../utils/tripLifecycle'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { SyncIndicator } from '../components/ui/SyncIndicator'
@@ -21,6 +25,7 @@ import { UpgradeModal } from '../components/trip/UpgradeModal'
 import { TripMembersModal } from '../components/trip/TripMembersModal'
 import { DeveloperModeModal } from '../components/trip/DeveloperModeModal'
 import { DeveloperVerifyModal } from '../components/trip/DeveloperVerifyModal'
+import { TripEndedModal } from '../components/trip/TripEndedModal'
 import type { UpgradeReason } from '../services/tripUnlockService'
 
 type Tab = 'itinerary' | 'expenses' | 'overview' | 'settlement'
@@ -48,6 +53,7 @@ export function TripRoomPage() {
   const [showDeveloperModal, setShowDeveloperModal] = useState(false)
   const [showMembersModal, setShowMembersModal] = useState(false)
   const [upgradeReason, setUpgradeReason] = useState<UpgradeReason | null>(null)
+  const [showTripEndedModal, setShowTripEndedModal] = useState(false)
 
   const { refresh: refreshUnlock } = useTripUnlock(trip)
 
@@ -68,6 +74,9 @@ export function TripRoomPage() {
       memberId: currentMember.id,
       memberName: currentMember.nickname,
       status: trip.status,
+      startDate: trip.startDate,
+      endDate: trip.endDate,
+      memberCount: getActiveMemberCount(trip.members),
     })
   }, [trip, currentMember])
 
@@ -171,11 +180,13 @@ export function TripRoomPage() {
     )
   }
 
-  const canEditItinerary =
+  const hasContentEditPermission =
     trip.status !== 'archived' &&
     (trip.editPermission === 'all_members' || currentMember?.isHost === true)
 
+  const tripPhase = getTripLifecyclePhase(trip)
   const isArchived = trip.status === 'archived'
+  const isEnded = tripPhase === 'ended'
   const activeMemberCount = getActiveMemberCount(trip.members)
   const isHost = currentMember?.isHost === true
 
@@ -201,6 +212,7 @@ export function TripRoomPage() {
                 {trip.name}
               </h1>
               {trip.status === 'archived' && <span className="trip-badge">已封存</span>}
+              {isEnded && <span className="trip-badge trip-badge--ended">已結束</span>}
             </div>
             <div className="trip-header-actions">
               <SyncIndicator visible={refreshing} />
@@ -237,6 +249,12 @@ export function TripRoomPage() {
               <ArchivedTripBanner compact />
             </div>
           )}
+          {isEnded && (
+            <div className="archived-hint archived-hint--compact">
+              <span>📌</span>
+              <p>{TRIP_ENDED_VIEW_HINT}</p>
+            </div>
+          )}
         </header>
 
         <nav className="tab-nav">
@@ -259,8 +277,9 @@ export function TripRoomPage() {
               trip={trip}
               tripId={trip.id}
               memberId={currentMember?.id}
-              canEdit={canEditItinerary}
+              canEdit={hasContentEditPermission}
               onReload={reload}
+              onEditBlocked={() => setShowTripEndedModal(true)}
             />
           )}
           {activeTab === 'expenses' && (
@@ -270,6 +289,7 @@ export function TripRoomPage() {
               currentMemberId={currentMember?.id}
               onReload={reload}
               onUpgradeRequired={handleShowUpgrade}
+              onEditBlocked={() => setShowTripEndedModal(true)}
             />
           )}
           {activeTab === 'overview' && (
@@ -335,6 +355,8 @@ export function TripRoomPage() {
         tripStartDate={trip.startDate}
         onChanged={handleUnlockChanged}
       />
+
+      <TripEndedModal open={showTripEndedModal} onClose={() => setShowTripEndedModal(false)} />
     </Layout>
   )
 }

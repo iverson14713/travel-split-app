@@ -99,6 +99,10 @@ export function JoinTripPage() {
       destination: tripDestination,
       memberId,
       memberName,
+      status: fetchedTrip?.status,
+      startDate: fetchedTrip?.startDate,
+      endDate: fetchedTrip?.endDate,
+      memberCount: fetchedTrip ? getActiveMembers(fetchedTrip.members).length : undefined,
     })
     navigate(`/trip/${trimmedCode}`, joined ? { state: { joined: true } } : undefined)
   }

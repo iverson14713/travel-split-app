@@ -31,6 +31,11 @@ import { getShareLink } from '../../utils/tripCode'
 import { getLineShareText } from '../../utils/shareText'
 import { updateRecentTripStatus } from '../../utils/storage'
 import { useAppUI } from '../../context/AppUIContext'
+import {
+  canModifyTripDates,
+  getTripLifecyclePhase,
+  isTripEnded,
+} from '../../utils/tripLifecycle'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { Input } from '../ui/Input'
@@ -108,12 +113,20 @@ export function SettingsPanel({
 
   const handleSaveTripDates = async () => {
     setDateError('')
+    if (!canModifyTripDates(trip)) {
+      setDateError('旅程已結束，無法修改日期。請建立新的旅程。')
+      return
+    }
     if (!tripStartDate || !tripEndDate) {
       setDateError('請選擇開始與結束日期')
       return
     }
     if (new Date(tripEndDate) < new Date(tripStartDate)) {
       setDateError('結束日期不能早於開始日期')
+      return
+    }
+    if (isTripEnded(trip) && tripEndDate > trip.endDate) {
+      setDateError('旅程已結束，無法將結束日期往後延長。請建立新的旅程。')
       return
     }
 
@@ -145,7 +158,7 @@ export function SettingsPanel({
   }
 
   const handlePermissionChange = async (permission: EditPermission) => {
-    if (!isHost || isArchived || trip.editPermission === permission) return
+    if (!isHost || isArchived || isEnded || trip.editPermission === permission) return
 
     setUpdating(true)
     try {
@@ -224,6 +237,8 @@ export function SettingsPanel({
   }
 
   const isArchived = trip.status === 'archived'
+  const isEnded = getTripLifecyclePhase(trip) === 'ended'
+  const datesEditable = canModifyTripDates(trip)
 
   return (
     <div className="settings-panel">
@@ -266,21 +281,21 @@ export function SettingsPanel({
               type="date"
               value={tripStartDate}
               onChange={(e) => setTripStartDate(e.target.value)}
-              disabled={isArchived}
+              disabled={!datesEditable}
             />
             <Input
               label="結束日期"
               type="date"
               value={tripEndDate}
               onChange={(e) => setTripEndDate(e.target.value)}
-              disabled={isArchived}
+              disabled={!datesEditable}
             />
             {dateError && <p className="form-error-msg">{dateError}</p>}
             <Button
               fullWidth
               onClick={handleSaveTripDates}
               disabled={
-                isArchived ||
+                !datesEditable ||
                 savingDates ||
                 (tripStartDate === trip.startDate && tripEndDate === trip.endDate)
               }
@@ -288,10 +303,15 @@ export function SettingsPanel({
               {savingDates ? '儲存中...' : '儲存日期'}
             </Button>
             {isArchived && <p className="settings-hint">已封存旅行無法修改日期</p>}
-            {!isArchived && !usage?.isUnlimited && (
-              <p className="settings-hint">免費版最多 5 天；解鎖後此趟旅程最多 30 天。</p>
+            {isEnded && !isArchived && (
+              <p className="settings-hint">旅程已結束，無法修改日期。請建立新的旅程。</p>
             )}
-            {!isArchived && usage?.isUnlimited && usage.unlockMaxEndDate && (
+            {!isArchived && !isEnded && !usage?.isUnlimited && (
+              <p className="settings-hint">
+                免費版最多 5 天；解鎖後此趟旅程最多 30 天。旅程結束後仍可查看與結算。
+              </p>
+            )}
+            {!isArchived && !isEnded && usage?.isUnlimited && usage.unlockMaxEndDate && (
               <p className="settings-hint">
                 此旅程已解鎖，最多可設定至 {formatUnlockMaxEndDate(usage.unlockMaxEndDate)}。
               </p>
@@ -324,26 +344,26 @@ export function SettingsPanel({
       <section className="settings-section">
         <h3 className="settings-title">行程編輯權限</h3>
         <div className="radio-group">
-          <label className={`radio-item ${!isHost || isArchived ? 'radio-item--disabled' : ''}`}>
+          <label className={`radio-item ${!isHost || isArchived || isEnded ? 'radio-item--disabled' : ''}`}>
             <input
               type="radio"
               name="editPermission"
               checked={trip.editPermission === 'owner_only'}
               onChange={() => handlePermissionChange('owner_only')}
-              disabled={!isHost || isArchived || updating}
+              disabled={!isHost || isArchived || isEnded || updating}
             />
             <div>
               <strong>只有主揪可編輯</strong>
               <p>行程由主揪統一管理</p>
             </div>
           </label>
-          <label className={`radio-item ${!isHost || isArchived ? 'radio-item--disabled' : ''}`}>
+          <label className={`radio-item ${!isHost || isArchived || isEnded ? 'radio-item--disabled' : ''}`}>
             <input
               type="radio"
               name="editPermission"
               checked={trip.editPermission === 'all_members'}
               onChange={() => handlePermissionChange('all_members')}
-              disabled={!isHost || isArchived || updating}
+              disabled={!isHost || isArchived || isEnded || updating}
             />
             <div>
               <strong>所有成員可編輯</strong>

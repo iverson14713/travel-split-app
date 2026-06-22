@@ -75,6 +75,9 @@ export function CreateTripPage() {
         destination: trip.destination,
         memberId,
         memberName: ownerName.trim() || '主揪',
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        memberCount: 1,
       })
       setCreatedRates(rates)
       setCreatedCode(trip.code)

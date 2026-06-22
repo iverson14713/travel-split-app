@@ -387,7 +387,7 @@ export function getUpgradeLeadCopy(reason: UpgradeReason): string {
   if (reason === 'create_member_limit') {
     return '免費版適合 4 人以內小旅行。如果這趟旅程有 5 位以上同伴，解鎖後可加入更多成員並使用完整功能。'
   }
-  return '免費版適合 5 天內小旅行。解鎖後這趟旅程可支援最多 30 天、更多成員與不限記帳筆數。'
+  return '單趟解鎖支援最多 30 天旅程。旅程結束後仍可查看行程、記帳與結算資料。'
 }
 
 export function getUnlockStatusLabel(status: TripUnlockStatus): string {

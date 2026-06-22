@@ -60,6 +60,9 @@ export function recordRecentTrip(
     memberName: entry.memberName,
     lastOpenedAt: now,
     status: entry.status ?? existing?.status ?? 'active',
+    startDate: entry.startDate ?? existing?.startDate,
+    endDate: entry.endDate ?? existing?.endDate,
+    memberCount: entry.memberCount ?? existing?.memberCount,
   }
 
   const others = getRecentTrips().filter((t) => t.tripCode !== normalized.tripCode)

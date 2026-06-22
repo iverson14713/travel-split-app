@@ -1,25 +1,38 @@
-import { useEffect, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { Layout } from '../components/Layout'
 import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { useAppUI } from '../context/AppUIContext'
 import { APP_NAME, APP_TAGLINE } from '../constants/app'
+import { formatDateRange } from '../utils/dates'
 import { getRecentTrips, setSession } from '../utils/storage'
+import {
+  getTripLifecyclePhase,
+  TRIP_LIFECYCLE_LABELS,
+  type TripLifecyclePhase,
+} from '../utils/tripLifecycle'
 import type { RecentTrip } from '../types'
 
 function TripCard({ trip, onEnter }: { trip: RecentTrip; onEnter: () => void }) {
-  const isArchived = trip.status === 'archived'
+  const phase = getTripLifecyclePhase(trip)
+  const dateRange =
+    trip.startDate && trip.endDate ? formatDateRange(trip.startDate, trip.endDate) : null
 
   return (
-    <article key={trip.tripCode} className={`home-trip-card card${isArchived ? ' home-trip-card--archived' : ''}`}>
+    <article className={`home-trip-card card home-trip-card--${phase}`}>
       <div className="home-trip-info">
         <div className="home-trip-name-row">
           <h3 className="home-trip-name">{trip.tripName}</h3>
-          {isArchived && <span className="home-trip-badge">已封存</span>}
+          <span className={`home-trip-badge home-trip-badge--${phase}`}>
+            {TRIP_LIFECYCLE_LABELS[phase]}
+          </span>
         </div>
         <p className="home-trip-meta">📍 {trip.destination}</p>
-        <p className="home-trip-code">代碼 {trip.tripCode}</p>
+        {dateRange && <p className="home-trip-meta">📅 {dateRange}</p>}
+        <p className="home-trip-meta">
+          {trip.memberCount != null ? `👥 ${trip.memberCount} 位成員` : `代碼 ${trip.tripCode}`}
+        </p>
       </div>
       <Button fullWidth onClick={onEnter}>
         進入旅程
@@ -28,19 +41,90 @@ function TripCard({ trip, onEnter }: { trip: RecentTrip; onEnter: () => void }) 
   )
 }
 
+function TripSection({
+  title,
+  trips,
+  onEnter,
+  collapsible = false,
+  defaultOpen = true,
+}: {
+  title: string
+  trips: RecentTrip[]
+  onEnter: (trip: RecentTrip) => void
+  collapsible?: boolean
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  if (trips.length === 0) return null
+
+  return (
+    <section className={`home-section${collapsible ? ' home-section--collapsible' : ''}`}>
+      {collapsible ? (
+        <button
+          type="button"
+          className="home-section-toggle"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+        >
+          <h2 className="home-section-title">
+            {title}（{trips.length}）
+          </h2>
+          <span className="home-section-toggle-icon">{open ? '▾' : '▸'}</span>
+        </button>
+      ) : (
+        <h2 className="home-section-title">{title}</h2>
+      )}
+      {(!collapsible || open) && (
+        <div className="home-trip-list">
+          {trips.map((trip) => (
+            <TripCard key={trip.tripCode} trip={trip} onEnter={() => onEnter(trip)} />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
+function groupRecentTrips(trips: RecentTrip[]): Record<TripLifecyclePhase, RecentTrip[]> {
+  const groups: Record<TripLifecyclePhase, RecentTrip[]> = {
+    active: [],
+    ended: [],
+    archived: [],
+  }
+
+  for (const trip of trips) {
+    groups[getTripLifecyclePhase(trip)].push(trip)
+  }
+
+  return groups
+}
+
 export function HomePage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { requestOnboarding } = useAppUI()
   const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([])
   const [joinCode, setJoinCode] = useState('')
-  const [showArchived, setShowArchived] = useState(false)
+
+  const refreshRecentTrips = () => {
+    setRecentTrips(getRecentTrips())
+  }
 
   useEffect(() => {
-    setRecentTrips(getRecentTrips())
+    refreshRecentTrips()
+  }, [location.pathname])
+
+  useEffect(() => {
+    const handleFocus = () => refreshRecentTrips()
+    window.addEventListener('focus', handleFocus)
+    return () => window.removeEventListener('focus', handleFocus)
   }, [])
 
-  const activeTrips = recentTrips.filter((t) => t.status !== 'archived')
-  const archivedTrips = recentTrips.filter((t) => t.status === 'archived')
+  const { active: activeTrips, ended: endedTrips, archived: archivedTrips } = useMemo(
+    () => groupRecentTrips(recentTrips),
+    [recentTrips],
+  )
 
   const handleEnterTrip = (trip: RecentTrip) => {
     setSession({ tripCode: trip.tripCode, memberId: trip.memberId })
@@ -75,32 +159,21 @@ export function HomePage() {
           ) : (
             <p className="home-empty-hint">
               {recentTrips.length > 0
-                ? '目前沒有進行中的旅行。已封存的旅行可在下方查看。'
+                ? '目前沒有進行中的旅行。已結束或已封存的旅行可在下方查看。'
                 : '如果朋友已經建立旅程，請從群組公告點連結，或輸入旅程代碼加入。'}
             </p>
           )}
         </section>
 
-        {archivedTrips.length > 0 && (
-          <section className="home-section home-section--archived">
-            <button
-              type="button"
-              className="home-section-toggle"
-              onClick={() => setShowArchived((open) => !open)}
-              aria-expanded={showArchived}
-            >
-              <h2 className="home-section-title">已封存旅行（{archivedTrips.length}）</h2>
-              <span className="home-section-toggle-icon">{showArchived ? '▾' : '▸'}</span>
-            </button>
-            {showArchived && (
-              <div className="home-trip-list">
-                {archivedTrips.map((trip) => (
-                  <TripCard key={trip.tripCode} trip={trip} onEnter={() => handleEnterTrip(trip)} />
-                ))}
-              </div>
-            )}
-          </section>
-        )}
+        <TripSection title="已結束旅行" trips={endedTrips} onEnter={handleEnterTrip} />
+
+        <TripSection
+          title="已封存旅行"
+          trips={archivedTrips}
+          onEnter={handleEnterTrip}
+          collapsible
+          defaultOpen={false}
+        />
 
         <section className="home-section">
           <h2 className="home-section-title">輸入旅程代碼</h2>

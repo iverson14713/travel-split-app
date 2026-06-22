@@ -77,6 +77,9 @@ export interface RecentTrip {
   memberName: string
   lastOpenedAt: string
   status?: TripStatus
+  startDate?: string
+  endDate?: string
+  memberCount?: number
 }
 
 export interface SettlementItem {
