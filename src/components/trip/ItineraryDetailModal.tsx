@@ -7,7 +7,6 @@ import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
 import { Select } from '../ui/Select'
-import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { ItineraryDeleteConfirmModal } from './ItineraryDeleteConfirmModal'
 
 interface ItineraryDetailModalProps {
@@ -17,6 +16,7 @@ interface ItineraryDetailModalProps {
   trip: Trip
   tripId: string
   editMode?: 'full' | 'notes' | 'none'
+  viewOnlyHint?: string
   onSaved: (dayIndex?: number) => Promise<void>
 }
 
@@ -36,6 +36,7 @@ export function ItineraryDetailModal({
   trip,
   tripId,
   editMode = 'none',
+  viewOnlyHint,
   onSaved,
 }: ItineraryDetailModalProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
@@ -184,7 +185,9 @@ export function ItineraryDetailModal({
           <DetailRow label="備註" value={item.note || '—'} />
           <DetailRow label="所屬日期" value={dayLabel} />
 
-          {editMode === 'none' && <p className="settings-hint">{ARCHIVED_VIEW_ONLY_HINT}</p>}
+          {editMode === 'none' && viewOnlyHint && (
+            <p className="settings-hint">{viewOnlyHint}</p>
+          )}
 
           <div className="itinerary-detail-actions">
             {canEdit && (

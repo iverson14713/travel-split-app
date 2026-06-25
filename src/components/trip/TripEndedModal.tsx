@@ -31,6 +31,11 @@ const COPY: Record<
     expense: '整理期間仍可補記支出。',
     itinerary: '整理期間僅可編輯既有行程備註，無法新增行程。',
   },
+  locked: {
+    title: '行程已鎖定',
+    expense: '記帳功能不受行程鎖定影響。',
+    itinerary: '行程已鎖定，請由主揪修改',
+  },
 }
 
 export function TripEndedModal({

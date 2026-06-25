@@ -1,3 +1,5 @@
+export const PUBLIC_APP_URL = 'https://travel-split-app-coral.vercel.app'
+
 export const APP_NAME = '旅分帳'
 export const APP_TAGLINE = '朋友出遊一起排行程、記帳、分帳，誰該給誰一眼看懂。'
 export const APP_DESCRIPTION =

@@ -8,6 +8,7 @@ import {
   parseItineraryText,
   type ParsedItineraryItem,
 } from '../../utils/parseItineraryText'
+import { sortItineraryItems } from '../../utils/itinerarySort'
 
 interface ItineraryImportModalProps {
   open: boolean
@@ -20,15 +21,6 @@ interface ItineraryImportModalProps {
 
 type Step = 'input' | 'preview'
 
-function comparePreviewItems(a: ParsedItineraryItem, b: ParsedItineraryItem): number {
-  const aEmpty = !a.time
-  const bEmpty = !b.time
-  if (aEmpty && !bEmpty) return 1
-  if (!aEmpty && bEmpty) return -1
-  if (!aEmpty && !bEmpty) return a.time.localeCompare(b.time)
-  return 0
-}
-
 function groupByDay(items: ParsedItineraryItem[]): Map<number, ParsedItineraryItem[]> {
   const map = new Map<number, ParsedItineraryItem[]>()
   for (const item of items) {
@@ -36,8 +28,8 @@ function groupByDay(items: ParsedItineraryItem[]): Map<number, ParsedItineraryIt
     list.push(item)
     map.set(item.dayIndex, list)
   }
-  for (const [, list] of map) {
-    list.sort(comparePreviewItems)
+  for (const [dayIndex, list] of map) {
+    map.set(dayIndex, sortItineraryItems(list))
   }
   return map
 }
@@ -75,6 +67,7 @@ export function ItineraryImportModal({
   const [parseResult, setParseResult] = useState<ReturnType<typeof parseItineraryText> | null>(null)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [partialParseHint, setPartialParseHint] = useState(false)
 
   const previewGroups = useMemo(() => {
     if (!parseResult) return new Map<number, ParsedItineraryItem[]>()
@@ -91,16 +84,21 @@ export function ItineraryImportModal({
     setInputText('')
     setParseResult(null)
     setError('')
+    setPartialParseHint(false)
     setSubmitting(false)
   }
 
   const handleClose = () => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur()
+    }
     reset()
     onClose()
   }
 
   const handleParse = () => {
     setError('')
+    setPartialParseHint(false)
     const trimmed = inputText.trim()
     if (!trimmed) {
       setError('請貼上行程文字')
@@ -108,14 +106,9 @@ export function ItineraryImportModal({
     }
 
     const result = parseItineraryText(trimmed, trip.startDate, trip.endDate)
-    const parsedCount = result.items.length + result.outOfRangeItems.length
-
-    if (parsedCount === 0) {
-      setError('無法解析任何行程，請調整文字格式後再試')
-      return
-    }
 
     setParseResult(result)
+    setPartialParseHint(result.unparsedLines.length > 0)
     setStep('preview')
   }
 
@@ -184,6 +177,9 @@ export function ItineraryImportModal({
         ) : (
           <>
             <div className="itinerary-import-preview">
+              {partialParseHint && (
+                <p className="itinerary-import-partial-hint">已解析部分行程，請確認後儲存</p>
+              )}
               {parseResult && (
                 <div className="itinerary-import-preview-summary">
                   <span>成功解析 {parsedDayCount} 天</span>

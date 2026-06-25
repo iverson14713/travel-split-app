@@ -6,7 +6,7 @@ import { Input } from '../components/ui/Input'
 import { useAppUI } from '../context/AppUIContext'
 import { APP_NAME, APP_TAGLINE } from '../constants/app'
 import { formatDateRange } from '../utils/dates'
-import { getRecentTrips, setSession, updateRecentTripUnlocked } from '../utils/storage'
+import { refreshRecentTripsFromServer, setSession, updateRecentTripUnlocked } from '../utils/storage'
 import { getTripMemberId } from '../utils/memberIdentity'
 import { TRIP_LIST_PHASE_LABELS, type HomeListPhase } from '../utils/tripLifecycle'
 import {
@@ -190,6 +190,7 @@ export function HomePage() {
   const location = useLocation()
   const { requestOnboarding } = useAppUI()
   const [recentTrips, setRecentTrips] = useState<RecentTrip[]>([])
+  const [loadingTrips, setLoadingTrips] = useState(true)
   const [joinCode, setJoinCode] = useState('')
   const [showJoinForm, setShowJoinForm] = useState(false)
   const [showExpiredModal, setShowExpiredModal] = useState(false)
@@ -198,10 +199,13 @@ export function HomePage() {
   const [upgradeTripCode, setUpgradeTripCode] = useState<string | null>(null)
 
   const refreshRecentTrips = () => {
-    setRecentTrips(getRecentTrips())
+    void refreshRecentTripsFromServer()
+      .then(setRecentTrips)
+      .finally(() => setLoadingTrips(false))
   }
 
   useEffect(() => {
+    setLoadingTrips(true)
     refreshRecentTrips()
   }, [location.pathname])
 
@@ -264,7 +268,7 @@ export function HomePage() {
           <p className="home-subtitle">{APP_TAGLINE}</p>
         </div>
 
-        {!hasAnyTrips ? (
+        {!loadingTrips && !hasAnyTrips ? (
           <section className="home-section home-section--empty">
             <p className="home-empty-hint">
               如果朋友已經建立旅程，請從群組公告點連結，或輸入旅程代碼加入。
@@ -293,6 +297,10 @@ export function HomePage() {
                 </Button>
               </div>
             )}
+          </section>
+        ) : loadingTrips ? (
+          <section className="home-section home-section--empty">
+            <p className="loading-text">載入旅程中...</p>
           </section>
         ) : (
           <>

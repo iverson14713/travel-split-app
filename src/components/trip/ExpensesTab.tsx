@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { Expense, Trip } from '../../types'
 import { formatAmount, resolveExchangeRateToTwd, toTwdAmount } from '../../utils/settlement'
+import { getMemberDisplayLabel } from '../../utils/memberNames'
 import { Card } from '../ui/Card'
 import { Button } from '../ui/Button'
 import { ExpenseDetailModal } from './ExpenseDetailModal'
@@ -31,13 +32,16 @@ interface ExpensesTabProps {
 function ExpenseCompactCard({
   expense,
   trip,
+  currentMemberId,
   onOpen,
 }: {
   expense: Expense
   trip: Trip
+  currentMemberId?: string
   onOpen: () => void
 }) {
-  const getMemberName = (id: string) => trip.members.find((m) => m.id === id)?.nickname ?? '未知'
+  const getMemberName = (id: string) =>
+    getMemberDisplayLabel(trip.members, id, currentMemberId)
   const currency = (expense.currency || 'TWD').toUpperCase()
   const twdEstimate =
     currency !== 'TWD'
@@ -171,6 +175,7 @@ export function ExpensesTab({
               key={expense.id}
               expense={expense}
               trip={trip}
+              currentMemberId={currentMemberId}
               onOpen={() => setSelectedExpense(expense)}
             />
           ))}
@@ -187,6 +192,7 @@ export function ExpensesTab({
         onEdit={handleEdit}
         onDeleted={onReload}
         readOnly={readOnly}
+        currentMemberId={currentMemberId}
       />
 
       <ExpenseUpsertModal

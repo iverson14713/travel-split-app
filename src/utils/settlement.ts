@@ -253,6 +253,52 @@ export function calculateMyTotalCostInTwd(
   return roundAmount(total, TWD)
 }
 
+export interface MyExpenseShareDetail {
+  id: string
+  name: string
+  date: string
+  payerId: string
+  amount: number
+  currency: string
+  shareTwd: number
+  createdAt: string
+}
+
+export function getMyExpenseShareDetails(
+  expenses: Expense[],
+  memberId: string,
+  tripRates?: TripRates,
+): MyExpenseShareDetail[] {
+  const details: MyExpenseShareDetail[] = []
+
+  for (const exp of expenses) {
+    if (exp.type !== 'expense') continue
+
+    const participants = exp.participantIds?.filter(Boolean) ?? []
+    if (!participants.includes(memberId)) continue
+
+    const amount = Number(exp.amount)
+    if (!Number.isFinite(amount) || participants.length === 0) continue
+
+    const rate = resolveExchangeRateToTwd(exp, tripRates)
+    const shareTwd = toTwdAmount(amount / participants.length, rate)
+    const name = exp.category?.trim() || exp.note?.trim() || '消費'
+
+    details.push({
+      id: exp.id,
+      name,
+      date: exp.createdAt,
+      payerId: exp.payerId,
+      amount,
+      currency: (exp.currency || TWD).toUpperCase(),
+      shareTwd,
+      createdAt: exp.createdAt,
+    })
+  }
+
+  return details.sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+}
+
 export function calculateTripTotalExpenseInTwd(
   expenses: Expense[],
   tripRates?: TripRates,

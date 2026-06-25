@@ -19,6 +19,7 @@ create table if not exists travel_trips (
   deleted_at timestamptz,
   edit_permission text not null default 'owner_only'
     check (edit_permission in ('owner_only', 'all_members')),
+  itinerary_locked boolean not null default false,
   base_currency text not null default 'TWD',
   jpy_to_twd_rate numeric not null default 0.215,
   usd_to_twd_rate numeric not null default 32,
@@ -40,6 +41,7 @@ create table if not exists travel_members (
   status text not null default 'active'
     check (status in ('active', 'removed')),
   removed_at timestamptz,
+  left_at timestamptz,
   created_at timestamptz not null default now()
 );
 

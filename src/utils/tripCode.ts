@@ -1,3 +1,5 @@
+import { PUBLIC_APP_URL } from '../constants/app'
+
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 
 export function generateTripCode(length = 6): string {
@@ -9,5 +11,6 @@ export function generateTripCode(length = 6): string {
 }
 
 export function getShareLink(code: string): string {
-  return `${window.location.origin}/join?code=${code}`
+  const inviteCode = code.trim().toUpperCase()
+  return `${PUBLIC_APP_URL}/join?code=${inviteCode}`
 }

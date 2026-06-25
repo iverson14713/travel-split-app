@@ -5,13 +5,15 @@ import { Button } from '../components/ui/Button'
 import { Input } from '../components/ui/Input'
 import { Select } from '../components/ui/Select'
 import { MemberJoinBlockedCard } from '../components/trip/MemberJoinBlockedCard'
-import { fetchTripByCode, joinTrip } from '../services/tripService'
+import { fetchTripByCode, joinTrip, reactivateMember } from '../services/tripService'
 import { checkMemberLimit, isTripUnlocked } from '../services/tripUnlockService'
 import {
+  clearTripLeftLocally,
   getTripMemberId,
   setTripMemberIdentity,
 } from '../utils/memberIdentity'
 import { getActiveMembers, getJoinClaimableMembers, isActiveMember } from '../utils/members'
+import { DUPLICATE_NICKNAME_ERROR, isDuplicateNickname } from '../utils/memberNames'
 import { recordRecentTrip, setSession } from '../utils/storage'
 import type { Member, Trip } from '../types'
 
@@ -32,13 +34,19 @@ export function JoinTripPage() {
   const [duplicateMember, setDuplicateMember] = useState<Member | null>(null)
   const [fetchedTrip, setFetchedTrip] = useState<Trip | null>(null)
 
-  const saveAndEnterTrip = useCallback((
+  const saveAndEnterTrip = useCallback(async (
     trip: Trip,
     memberId: string,
     memberName: string,
     joined = false,
   ) => {
+    const member = trip.members.find((item) => item.id === memberId)
+    if (member?.leftAt) {
+      await reactivateMember(memberId, trip.id)
+    }
+
     const trimmedCode = trip.code.toUpperCase()
+    clearTripLeftLocally(trip.id)
     setTripMemberIdentity(trip.id, memberId, memberName)
     setSession({ tripCode: trimmedCode, memberId })
     recordRecentTrip({
@@ -90,8 +98,8 @@ export function JoinTripPage() {
           ? trip.members.find((member) => member.id === localMemberId && isActiveMember(member))
           : undefined
 
-        if (localMember) {
-          saveAndEnterTrip(trip, localMember.id, localMember.nickname)
+        if (localMember && !localMember.leftAt) {
+          void saveAndEnterTrip(trip, localMember.id, localMember.nickname)
           return
         }
 
@@ -144,22 +152,26 @@ export function JoinTripPage() {
         const localMember = fetchedTrip.members.find(
           (member) => member.id === localMemberId && isActiveMember(member),
         )
-        if (localMember) {
-          saveAndEnterTrip(fetchedTrip, localMember.id, localMember.nickname)
+        if (localMember && !localMember.leftAt) {
+          void saveAndEnterTrip(fetchedTrip, localMember.id, localMember.nickname)
           return
         }
       }
     }
 
-    const existing = members.find(
-      (member) => member.nickname.trim().toLowerCase() === trimmedNickname.toLowerCase(),
-    )
-    if (existing) {
-      if (existing.isHost) {
-        setError('此暱稱已被主揪使用，請換一個名字加入。')
+    if (isDuplicateNickname(members, trimmedNickname)) {
+      const matched = members.find(
+        (member) => member.nickname.trim().toLowerCase() === trimmedNickname.toLowerCase(),
+      )
+      if (matched) {
+        if (matched.isHost) {
+          setError(DUPLICATE_NICKNAME_ERROR)
+          return
+        }
+        setDuplicateMember(matched)
         return
       }
-      setDuplicateMember(existing)
+      setError(DUPLICATE_NICKNAME_ERROR)
       return
     }
 
@@ -180,7 +192,7 @@ export function JoinTripPage() {
       }
 
       const member = await joinTrip(trip.id, trimmedNickname)
-      saveAndEnterTrip(trip, member.id, member.nickname, true)
+      await saveAndEnterTrip(trip, member.id, member.nickname, true)
     } catch (err) {
       setError(err instanceof Error ? err.message : '加入旅行失敗，請稍後再試')
     } finally {
@@ -188,16 +200,16 @@ export function JoinTripPage() {
     }
   }
 
-  const handleReclaimIdentity = () => {
+  const handleReclaimIdentity = async () => {
     if (!duplicateMember || !fetchedTrip || duplicateMember.isHost) return
-    saveAndEnterTrip(fetchedTrip, duplicateMember.id, duplicateMember.nickname)
+    await saveAndEnterTrip(fetchedTrip, duplicateMember.id, duplicateMember.nickname)
   }
 
-  const handleEnterWithSelectedIdentity = () => {
+  const handleEnterWithSelectedIdentity = async () => {
     if (!selectedMemberId || !fetchedTrip) return
     const member = joinableMembers.find((item) => item.id === selectedMemberId)
     if (!member || member.isHost) return
-    saveAndEnterTrip(fetchedTrip, member.id, member.nickname)
+    await saveAndEnterTrip(fetchedTrip, member.id, member.nickname)
   }
 
   const showNotFound = !checkingTrip && tripFound === false && code.trim().length > 0

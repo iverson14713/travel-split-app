@@ -14,7 +14,11 @@ export function Input({ label, error, id, className = '', ...props }: InputProps
           {label}
         </label>
       )}
-      <input id={inputId} className={`form-input ${className}`} {...props} />
+      <input
+        id={inputId}
+        className={`form-input${error ? ' form-input--error' : ''} ${className}`.trim()}
+        {...props}
+      />
       {error && <span className="form-error">{error}</span>}
     </div>
   )

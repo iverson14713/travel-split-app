@@ -12,7 +12,7 @@ export type TripDisplayStatus = HomeListPhase
 
 export type TripEditBlockReason = 'ended' | 'archived'
 
-export type TripItineraryBlockReason = 'ended' | 'archived' | 'settling'
+export type TripItineraryBlockReason = 'ended' | 'archived' | 'settling' | 'locked'
 
 export const TRIP_LIST_PHASE_LABELS: Record<HomeListPhase, string> = {
   active: '進行中',

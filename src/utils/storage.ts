@@ -1,5 +1,12 @@
 import type { RecentTrip, TripStatus, UserSession } from '../types'
-import { getTripMemberId, getTripNickname } from './memberIdentity'
+import { fetchTripByCode } from '../services/tripService'
+import { getActiveMemberCount } from './members'
+import {
+  clearTripMemberIdentity,
+  getTripMemberId,
+  getTripNickname,
+  isTripLeftLocally,
+} from './memberIdentity'
 
 const SESSION_KEY = 'travel-split-session'
 /** 本機近期旅程列表（等同 recent_trip_ids 用途） */
@@ -114,4 +121,69 @@ export function updateRecentTripStatus(tripCode: string, status: TripStatus): vo
       : t,
   )
   localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
+}
+
+export function removeRecentTrip(tripCode: string): void {
+  const normalizedCode = tripCode.toUpperCase()
+  const updated = getRecentTrips().filter((trip) => trip.tripCode !== normalizedCode)
+  localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
+}
+
+export function removeRecentTripByTripId(tripId: string): void {
+  const updated = getRecentTrips().filter((trip) => trip.tripId !== tripId)
+  localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(updated))
+}
+
+export async function refreshRecentTripsFromServer(): Promise<RecentTrip[]> {
+  const local = getRecentTrips()
+  if (local.length === 0) return []
+
+  const validated: RecentTrip[] = []
+
+  for (const entry of local) {
+    if (entry.tripId && isTripLeftLocally(entry.tripId)) {
+      continue
+    }
+
+    try {
+      const trip = await fetchTripByCode(entry.tripCode)
+      if (!trip) {
+        removeRecentTrip(entry.tripCode)
+        if (entry.tripId) clearTripMemberIdentity(entry.tripId)
+        continue
+      }
+
+      const memberId = entry.tripId
+        ? getTripMemberId(entry.tripId) ?? entry.memberId
+        : entry.memberId
+
+      if (memberId) {
+        const member = trip.members.find((item) => item.id === memberId)
+        if (!member || member.status === 'removed' || member.leftAt) {
+          removeRecentTrip(entry.tripCode)
+          if (entry.tripId) clearTripMemberIdentity(entry.tripId)
+          continue
+        }
+      }
+
+      validated.push({
+        ...entry,
+        tripId: trip.id,
+        tripName: trip.name,
+        destination: trip.destination,
+        status: trip.status,
+        startDate: trip.startDate,
+        endDate: trip.endDate,
+        memberCount: getActiveMemberCount(trip.members),
+        archivedAt: trip.archivedAt,
+      })
+    } catch {
+      validated.push(entry)
+    }
+  }
+
+  localStorage.setItem(RECENT_TRIPS_KEY, JSON.stringify(validated))
+  return validated.sort(
+    (a, b) => new Date(b.lastOpenedAt).getTime() - new Date(a.lastOpenedAt).getTime(),
+  )
 }

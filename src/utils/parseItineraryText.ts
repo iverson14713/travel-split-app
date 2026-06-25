@@ -30,6 +30,9 @@ const PERIOD_TIME: Record<string, string> = {
 }
 
 const TIMELESS_NOTE = '未指定時間'
+const FALLBACK_TITLE = '待整理行程'
+const TIME_PATTERN = /(\d{1,2}:\d{2})/g
+const SEGMENT_DELIMITERS = /[，,、。\r\n]+/u
 
 const META_PREFIX =
   /^(這天重點|住宿建議|提醒|建議方式|小提醒|預算|注意事項|交通建議)\s*[:：]/u
@@ -374,12 +377,16 @@ function tryParseItineraryLine(line: string): Omit<ParsedItineraryItem, 'dayInde
 
   const clockMatch = trimmed.match(
     new RegExp(
-      `^(\\d{1,2}:\\d{2})(?:\\s*${TIME_DASH}\\s*\\d{1,2}:\\d{2})?(?:\\s+|[|｜]|${TIME_DASH}\\s*|\\s*[:：]\\s*)(.+)$`,
+      `^(\\d{1,2}:\\d{2})(?:\\s*${TIME_DASH}\\s*\\d{1,2}:\\d{2})?(?:\\s*|[|｜]|${TIME_DASH}\\s*|\\s*[:：]\\s*)(.+)$`,
       'u',
     ),
   )
   if (clockMatch) {
-    const segments = splitContentSegments(clockMatch[2])
+    const titlePart = clockMatch[2].trim()
+    const extraTimes = titlePart.match(TIME_PATTERN)
+    if (extraTimes && extraTimes.length > 0) return null
+
+    const segments = splitContentSegments(titlePart)
     const { title, location, note } = parseTitleLocationNote(segments)
     if (!title) return null
     return finalizeParsedItem(normalizeTime(clockMatch[1]), title, location, note)
@@ -443,6 +450,81 @@ function shouldListAsUnparsed(line: string, currentDayIndex: number | null): boo
   return trimmed.length >= 10
 }
 
+function stripEdgeDelimiters(text: string): string {
+  return text.replace(/^[，,、。\s]+|[，,、。\s]+$/gu, '').trim()
+}
+
+function splitTextSegments(text: string): string[] {
+  return text
+    .split(SEGMENT_DELIMITERS)
+    .map((segment) => stripEdgeDelimiters(segment))
+    .filter(Boolean)
+}
+
+function countTimeMarkers(text: string): number {
+  return [...text.matchAll(TIME_PATTERN)].length
+}
+
+function parseChunkWithTimes(chunk: string): Omit<ParsedItineraryItem, 'dayIndex'>[] {
+  const trimmed = stripEdgeDelimiters(chunk)
+  if (!trimmed) return []
+
+  if (countTimeMarkers(trimmed) <= 1) {
+    const lineParsed = tryParseItineraryLine(trimmed)
+    if (lineParsed?.title) return [lineParsed]
+  }
+
+  const matches = [...trimmed.matchAll(TIME_PATTERN)]
+  if (matches.length === 0) {
+    return [buildTimelessItem(trimmed)]
+  }
+
+  const results: Omit<ParsedItineraryItem, 'dayIndex'>[] = []
+
+  const firstMatch = matches[0]
+  if (firstMatch.index != null && firstMatch.index > 0) {
+    const before = stripEdgeDelimiters(trimmed.slice(0, firstMatch.index))
+    if (before) results.push(buildTimelessItem(before))
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const match = matches[i]
+    const time = normalizeTime(match[1])
+    const startIdx = (match.index ?? 0) + match[0].length
+    const endIdx = i + 1 < matches.length ? (matches[i + 1].index ?? trimmed.length) : trimmed.length
+    const title = stripEdgeDelimiters(trimmed.slice(startIdx, endIdx))
+    if (title) {
+      results.push(finalizeParsedItem(time, title, '', ''))
+    }
+  }
+
+  return results
+}
+
+function fallbackParseText(inputText: string, defaultDayIndex: number): ParsedItineraryItem[] {
+  const items: ParsedItineraryItem[] = []
+
+  for (const segment of splitTextSegments(inputText)) {
+    for (const parsed of parseChunkWithTimes(segment)) {
+      if (!parsed.title) continue
+      items.push({ dayIndex: defaultDayIndex, ...parsed })
+    }
+  }
+
+  return items
+}
+
+function buildFallbackItem(inputText: string, defaultDayIndex: number): ParsedItineraryItem {
+  const trimmed = inputText.trim()
+  return {
+    dayIndex: defaultDayIndex,
+    time: '',
+    title: FALLBACK_TITLE,
+    location: '',
+    note: trimmed ? `${TIMELESS_NOTE} · ${trimmed}` : TIMELESS_NOTE,
+  }
+}
+
 /**
  * Lenient rule-based itinerary text parser. Future AI / file import can reuse this signature.
  */
@@ -491,22 +573,33 @@ export function parseItineraryText(
 
     const parsed = tryParseItineraryLine(line)
     if (parsed?.title) {
-      if (currentDayIndex == null) {
-        if (shouldListAsUnparsed(line, currentDayIndex)) {
-          unparsedLines.push(line)
-        }
-        continue
-      }
-
+      const dayIdx = currentDayIndex ?? 1
       pushItem(
         {
-          dayIndex: currentDayIndex,
+          dayIndex: dayIdx,
           ...parsed,
         },
         items,
         outOfRangeItems,
         maxDay,
       )
+      continue
+    }
+
+    const chunkItems = splitTextSegments(line).flatMap((segment) => parseChunkWithTimes(segment))
+    if (chunkItems.length > 0) {
+      const dayIdx = currentDayIndex ?? 1
+      for (const chunkItem of chunkItems) {
+        pushItem(
+          {
+            dayIndex: dayIdx,
+            ...chunkItem,
+          },
+          items,
+          outOfRangeItems,
+          maxDay,
+        )
+      }
       continue
     }
 
@@ -526,6 +619,19 @@ export function parseItineraryText(
     if (shouldListAsUnparsed(line, currentDayIndex)) {
       unparsedLines.push(line)
     }
+  }
+
+  if (items.length === 0 && outOfRangeItems.length === 0) {
+    const defaultDay = currentDayIndex ?? 1
+    const fallbackItems = fallbackParseText(inputText, defaultDay)
+    for (const item of fallbackItems) {
+      pushItem(item, items, outOfRangeItems, maxDay)
+    }
+  }
+
+  if (items.length === 0 && outOfRangeItems.length === 0) {
+    const defaultDay = currentDayIndex ?? 1
+    pushItem(buildFallbackItem(inputText, defaultDay), items, outOfRangeItems, maxDay)
   }
 
   return { items, outOfRangeItems, unparsedLines, dayNotes, dayHeaderExtras }

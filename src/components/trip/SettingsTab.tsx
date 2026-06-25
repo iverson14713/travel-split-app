@@ -1,15 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { EditPermission, Trip } from '../../types'
+import type { Trip } from '../../types'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import {
   archiveTrip,
+  leaveTrip,
   restoreTrip,
   softDeleteTrip,
-  updateEditPermission,
+  updateItineraryLocked,
   updateMemberName,
   updateTripDates,
 } from '../../services/tripService'
 import { getActiveMembers } from '../../utils/members'
+import { DUPLICATE_NICKNAME_ERROR, isDuplicateNickname } from '../../utils/memberNames'
 import { useRemoveMember } from '../../hooks/useRemoveMember'
 import { useTripUnlock } from '../../hooks/useTripUnlock'
 import type { UpgradeReason } from '../../services/tripUnlockService'
@@ -28,9 +30,14 @@ import { RestoreTripUnlockButton } from './RestorePurchasesButton'
 import { TripTooLongModal } from './TripTooLongModal'
 import { TripUnlockWindowExceededModal } from './TripUnlockWindowExceededModal'
 import { getShareLink } from '../../utils/tripCode'
-import { updateTripNickname } from '../../utils/memberIdentity'
+import { updateTripNickname, markTripLeftLocally, clearTripMemberIdentity } from '../../utils/memberIdentity'
 import { getLineShareText } from '../../utils/shareText'
-import { updateRecentTripStatus } from '../../utils/storage'
+import {
+  clearSession,
+  getSession,
+  removeRecentTrip,
+  updateRecentTripStatus,
+} from '../../utils/storage'
 import { useAppUI } from '../../context/AppUIContext'
 import {
   canModifyTripDates,
@@ -51,6 +58,7 @@ interface SettingsPanelProps {
   onUpgradeRequired?: (reason: UpgradeReason) => void
   onStatusMessage?: (message: string) => void
   onTripDeleted?: () => void
+  onTripLeft?: () => void
   onGoHome?: () => void
 }
 
@@ -63,6 +71,7 @@ export function SettingsPanel({
   onUpgradeRequired,
   onStatusMessage,
   onTripDeleted,
+  onTripLeft,
   onGoHome,
 }: SettingsPanelProps) {
   const [copied, setCopied] = useState(false)
@@ -72,6 +81,7 @@ export function SettingsPanel({
   const [nameError, setNameError] = useState('')
   const [managingTrip, setManagingTrip] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [showLeaveConfirm, setShowLeaveConfirm] = useState(false)
   const [showTooLongModal, setShowTooLongModal] = useState(false)
   const [unlockWindowMaxEndDate, setUnlockWindowMaxEndDate] = useState<string | null>(null)
   const [tripStartDate, setTripStartDate] = useState(trip.startDate)
@@ -160,13 +170,14 @@ export function SettingsPanel({
     }
   }
 
-  const handlePermissionChange = async (permission: EditPermission) => {
-    if (!isHost || isArchived || isEnded || trip.editPermission === permission) return
+  const handleItineraryLockChange = async (locked: boolean) => {
+    if (!isHost || isArchived || isEnded || trip.itineraryLocked === locked) return
 
     setUpdating(true)
     try {
-      await updateEditPermission(tripId, permission)
+      await updateItineraryLocked(tripId, locked)
       await onReload({ silent: true })
+      onStatusMessage?.(locked ? '已鎖定行程' : '已解除鎖定')
     } finally {
       setUpdating(false)
     }
@@ -178,6 +189,10 @@ export function SettingsPanel({
     const trimmed = myName.trim()
     if (!trimmed) {
       setNameError('暱稱不能為空')
+      return
+    }
+    if (isDuplicateNickname(trip.members, trimmed, currentMemberId)) {
+      setNameError(DUPLICATE_NICKNAME_ERROR)
       return
     }
 
@@ -233,8 +248,38 @@ export function SettingsPanel({
     setManagingTrip(true)
     try {
       await softDeleteTrip(tripId)
+      removeRecentTrip(trip.code)
+      clearTripMemberIdentity(tripId)
+      if (getSession()?.tripCode === trip.code.toUpperCase()) {
+        clearSession()
+      }
       setShowDeleteConfirm(false)
+      onStatusMessage?.('已刪除旅程')
       onTripDeleted?.()
+    } catch {
+      onStatusMessage?.('刪除失敗，請稍後再試')
+    } finally {
+      setManagingTrip(false)
+    }
+  }
+
+  const handleLeaveTrip = async () => {
+    if (!currentMemberId) return
+
+    setManagingTrip(true)
+    try {
+      await leaveTrip(currentMemberId, tripId)
+      markTripLeftLocally(tripId)
+      removeRecentTrip(trip.code)
+      clearTripMemberIdentity(tripId)
+      if (getSession()?.tripCode === trip.code.toUpperCase()) {
+        clearSession()
+      }
+      setShowLeaveConfirm(false)
+      onStatusMessage?.('已退出行程')
+      onTripLeft?.()
+    } catch (err) {
+      onStatusMessage?.(err instanceof Error ? err.message : '退出行程失敗，請稍後再試')
     } finally {
       setManagingTrip(false)
     }
@@ -356,37 +401,33 @@ export function SettingsPanel({
       </section>
 
       <section className="settings-section">
-        <h3 className="settings-title">行程編輯權限</h3>
-        <div className="radio-group">
-          <label className={`radio-item ${!isHost || isArchived || isEnded ? 'radio-item--disabled' : ''}`}>
-            <input
-              type="radio"
-              name="editPermission"
-              checked={trip.editPermission === 'owner_only'}
-              onChange={() => handlePermissionChange('owner_only')}
-              disabled={!isHost || isArchived || isEnded || updating}
-            />
-            <div>
-              <strong>只有主揪可編輯</strong>
-              <p>行程由主揪統一管理</p>
-            </div>
-          </label>
-          <label className={`radio-item ${!isHost || isArchived || isEnded ? 'radio-item--disabled' : ''}`}>
-            <input
-              type="radio"
-              name="editPermission"
-              checked={trip.editPermission === 'all_members'}
-              onChange={() => handlePermissionChange('all_members')}
-              disabled={!isHost || isArchived || isEnded || updating}
-            />
-            <div>
-              <strong>所有成員可編輯</strong>
-              <p>每位旅伴都能新增與修改行程</p>
-            </div>
-          </label>
-        </div>
-        {!isHost && <p className="settings-hint">僅主揪可變更此設定</p>}
-        {isArchived && <p className="settings-hint">已封存旅行無法變更編輯權限</p>}
+        <h3 className="settings-title">行程鎖定</h3>
+        <Card className="settings-card">
+          <p className="settings-manage-label">
+            目前狀態：
+            {trip.itineraryLocked ? '行程已鎖定，只有主揪可編輯' : '大家都可以編輯'}
+          </p>
+          <p className="settings-hint">
+            鎖定後僅主揪可新增、編輯或刪除行程；記帳功能不受影響，所有成員仍可使用。
+          </p>
+          {isHost ? (
+            <label className={`radio-item ${isArchived || isEnded ? 'radio-item--disabled' : ''}`}>
+              <input
+                type="checkbox"
+                checked={trip.itineraryLocked}
+                onChange={(e) => void handleItineraryLockChange(e.target.checked)}
+                disabled={isArchived || isEnded || updating}
+              />
+              <div>
+                <strong>鎖定行程</strong>
+                <p>開啟後只有主揪可以修改行程內容</p>
+              </div>
+            </label>
+          ) : (
+            <p className="settings-hint">僅主揪可變更鎖定狀態</p>
+          )}
+          {isArchived && <p className="settings-hint">已封存旅行無法變更鎖定狀態</p>}
+        </Card>
       </section>
 
       <section className="settings-section">
@@ -425,6 +466,8 @@ export function SettingsPanel({
         <h3 className="settings-title">成員列表（{activeMembers.length}）</h3>
         <ActiveMemberList
           members={activeMembers}
+          currentMemberId={currentMemberId}
+          allMembers={trip.members}
           showRemove={isHost && !isArchived}
           onRemove={requestRemove}
         />
@@ -433,6 +476,21 @@ export function SettingsPanel({
       <section className="settings-section">
         <h3 className="settings-title">旅行管理</h3>
         <Card className="settings-card">
+          <div className="settings-manage-block">
+            <p className="settings-manage-label">退出行程</p>
+            <p className="settings-hint">
+              退出後此旅程將不再顯示在首頁，但既有記帳與分帳資料會保留。
+            </p>
+            <Button
+              fullWidth
+              variant="outline"
+              onClick={() => setShowLeaveConfirm(true)}
+              disabled={managingTrip || !currentMemberId}
+            >
+              退出行程
+            </Button>
+          </div>
+
           <div className="settings-manage-block">
             <p className="settings-manage-label">封存旅行</p>
             <p className="settings-hint">
@@ -499,6 +557,25 @@ export function SettingsPanel({
         onClose={cancelRemove}
         onConfirm={confirmRemove}
       />
+
+      <Modal open={showLeaveConfirm} onClose={() => setShowLeaveConfirm(false)} title="退出行程？">
+        <div className="form">
+          <p className="settings-hint">
+            退出後此旅程將不再顯示在首頁，但既有記帳與分帳資料會保留。
+          </p>
+          <Button fullWidth variant="secondary" onClick={handleLeaveTrip} disabled={managingTrip}>
+            {managingTrip ? '處理中...' : '確認退出'}
+          </Button>
+          <Button
+            fullWidth
+            variant="outline"
+            onClick={() => setShowLeaveConfirm(false)}
+            disabled={managingTrip}
+          >
+            取消
+          </Button>
+        </div>
+      </Modal>
 
       <Modal open={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} title="刪除旅行？">
         <div className="form">

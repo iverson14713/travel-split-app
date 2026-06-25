@@ -7,7 +7,7 @@ import { useSyncTripUnlockFromServer } from '../hooks/useSyncTripUnlockFromServe
 import { recordRecentTrip, setSession, updateRecentTripUnlocked } from '../utils/storage'
 import { getTripMemberId } from '../utils/memberIdentity'
 import { formatDateRange } from '../utils/dates'
-import { getActiveMemberCount, isActiveMember } from '../utils/members'
+import { getActiveMemberCount, isActiveMember, isTripOwner } from '../utils/members'
 import { getShareLink } from '../utils/tripCode'
 import {
   getTripDisplayStatus,
@@ -210,10 +210,6 @@ export function TripRoomPage() {
     )
   }
 
-  const hasContentEditPermission =
-    trip.status !== 'archived' &&
-    (trip.editPermission === 'all_members' || currentMember?.isHost === true)
-
   const tripStatus = getTripDisplayStatus(trip)
   const isArchived = trip.status === 'archived'
   const isActive = tripStatus === 'active'
@@ -221,7 +217,7 @@ export function TripRoomPage() {
   const isEnded = tripStatus === 'ended'
   const isUpcoming = tripStatus === 'upcoming'
   const activeMemberCount = getActiveMemberCount(trip.members)
-  const isHost = currentMember?.isHost === true
+  const isHost = currentMember != null && isTripOwner(currentMember, trip)
 
   return (
     <Layout>
@@ -319,7 +315,6 @@ export function TripRoomPage() {
               trip={trip}
               tripId={trip.id}
               memberId={currentMember?.id}
-              canEdit={hasContentEditPermission}
               onReload={reload}
               onEditBlocked={() => setShowTripEndedModal(true)}
             />
@@ -358,12 +353,13 @@ export function TripRoomPage() {
         <SettingsPanel
           trip={trip}
           tripId={trip.id}
-          isHost={currentMember?.isHost ?? false}
+          isHost={isHost}
           currentMemberId={currentMember?.id}
           onReload={reload}
           onUpgradeRequired={handleShowUpgrade}
           onStatusMessage={setStatusToast}
           onTripDeleted={() => navigate('/')}
+          onTripLeft={() => navigate('/')}
           onGoHome={() => {
             setShowSettings(false)
             navigate('/')

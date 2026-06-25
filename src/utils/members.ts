@@ -1,7 +1,7 @@
 import type { Expense, Member, Trip } from '../types'
 
 export function isActiveMember(member: Member): boolean {
-  return member.status !== 'removed'
+  return member.status !== 'removed' && !member.leftAt
 }
 
 export function isTripOwner(member: Member, trip: Pick<Trip, 'ownerMemberId' | 'members'>): boolean {

@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { Trip } from '../../types'
 import {
   calculateCategoryTotalsInTwd,
@@ -9,10 +9,12 @@ import {
   countExpenseItems,
   formatAmount,
 } from '../../utils/settlement'
+import { buildMemberDisplayLabelMap } from '../../utils/memberNames'
 import { Button } from '../ui/Button'
 import { Card } from '../ui/Card'
 import { ARCHIVED_VIEW_ONLY_HINT } from './ArchivedTripBanner'
 import { FreeAppRecommendation } from './FreeAppRecommendation'
+import { MySpendingDetailsModal } from './MySpendingDetailsModal'
 
 interface OverviewTabProps {
   trip: Trip
@@ -43,6 +45,7 @@ function getBalanceCardContent(balance: number) {
 }
 
 export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: OverviewTabProps) {
+  const [showSpendingDetails, setShowSpendingDetails] = useState(false)
   const tripRates = useMemo(() => trip.exchangeRatesToTwd, [trip.exchangeRatesToTwd])
 
   const twdBalance = useMemo(() => {
@@ -65,6 +68,11 @@ export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: Overvie
   const memberShares = useMemo(
     () => calculateMemberSharesInTwd(trip.expenses, trip.members, tripRates),
     [trip.expenses, trip.members, tripRates],
+  )
+
+  const memberDisplayLabels = useMemo(
+    () => buildMemberDisplayLabelMap(trip.members, currentMemberId),
+    [trip.members, currentMemberId],
   )
 
   const categoryTotals = useMemo(
@@ -114,12 +122,24 @@ export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: Overvie
         )}
       </Card>
 
-      <Card className="overview-card overview-card--compact">
+      <Card className="overview-card overview-card--compact overview-card--action">
         <h3 className="overview-section-title">我的總花費</h3>
         <p className="overview-card-value overview-card-value--amount">
           TWD {formatAmount(twdTotalCost, 'TWD')}
         </p>
         <p className="overview-card-hint">你在消費支出中應分攤的金額</p>
+        {currentMemberId && (
+          <div className="overview-card-action">
+            <Button
+              size="sm"
+              variant="outline"
+              type="button"
+              onClick={() => setShowSpendingDetails(true)}
+            >
+              查看明細
+            </Button>
+          </div>
+        )}
       </Card>
 
       <Card className="overview-card overview-card--compact">
@@ -138,7 +158,9 @@ export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: Overvie
               {memberShares.map((member) => (
                 <li key={member.memberId} className="overview-member-item">
                   <div className="overview-member-row">
-                    <span className="overview-member-name">{member.nickname}</span>
+                    <span className="overview-member-name">
+                      {memberDisplayLabels.get(member.memberId) ?? member.nickname}
+                    </span>
                     <span className="overview-member-amount">
                       TWD {formatAmount(member.total, 'TWD')}
                     </span>
@@ -175,6 +197,15 @@ export function OverviewTab({ trip, currentMemberId, onGoToSettlement }: Overvie
       </p>
 
       <FreeAppRecommendation trip={trip} />
+
+      {currentMemberId && (
+        <MySpendingDetailsModal
+          open={showSpendingDetails}
+          onClose={() => setShowSpendingDetails(false)}
+          trip={trip}
+          currentMemberId={currentMemberId}
+        />
+      )}
     </div>
   )
 }

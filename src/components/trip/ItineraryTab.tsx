@@ -4,6 +4,13 @@ import { getTripDays } from '../../utils/dates'
 import type { ReloadOptions } from '../../hooks/useTrip'
 import { addItineraryItem } from '../../services/tripService'
 import { useItineraryRealtime } from '../../hooks/useItineraryRealtime'
+import { sortItineraryItems } from '../../utils/itinerarySort'
+import {
+  canMemberEditItineraryNotes,
+  canMemberFullyEditItinerary,
+  getItineraryLockedBlockedReason,
+  ITINERARY_LOCKED_MESSAGE,
+} from '../../utils/tripPermissions'
 import { Button } from '../ui/Button'
 import { Input } from '../ui/Input'
 import { Textarea } from '../ui/Textarea'
@@ -16,8 +23,6 @@ import { ItineraryImportModal } from './ItineraryImportModal'
 import { TripEndedModal } from './TripEndedModal'
 import type { ItineraryItem } from '../../types'
 import {
-  canEditItinerary,
-  canEditItineraryNotes,
   getItineraryAddBlockedReason,
   getTripDisplayStatus,
   TRIP_ARCHIVED_VIEW_HINT,
@@ -30,7 +35,6 @@ interface ItineraryTabProps {
   trip: Trip
   tripId: string
   memberId?: string
-  canEdit: boolean
   onReload: (options?: ReloadOptions) => Promise<void>
   onEditBlocked?: () => void
 }
@@ -40,13 +44,14 @@ function getDefaultActiveDay(days: ReturnType<typeof getTripDays>, itinerary: Tr
   return firstWithItems?.day ?? days[0]?.day ?? 1
 }
 
-export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEditBlocked }: ItineraryTabProps) {
+export function ItineraryTab({ trip, tripId, memberId, onReload, onEditBlocked }: ItineraryTabProps) {
   const days = getTripDays(trip.startDate, trip.endDate)
   const [showModal, setShowModal] = useState(false)
   const [showImportModal, setShowImportModal] = useState(false)
   const [selectedDay, setSelectedDay] = useState(1)
   const [time, setTime] = useState('')
   const [title, setTitle] = useState('')
+  const [titleError, setTitleError] = useState('')
   const [location, setLocation] = useState('')
   const [note, setNote] = useState('')
   const [submitting, setSubmitting] = useState(false)
@@ -65,9 +70,9 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
   const itemsByDay = useMemo(() => {
     const map = new Map<number, Trip['itinerary']>()
     for (const day of days) {
-      const items = trip.itinerary
-        .filter((item) => item.day === day.day)
-        .sort((a, b) => a.time.localeCompare(b.time))
+      const items = sortItineraryItems(
+        trip.itinerary.filter((item) => item.day === day.day),
+      )
       map.set(day.day, items)
     }
     return map
@@ -92,6 +97,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
     setLocation('')
     setNote('')
     setError('')
+    setTitleError('')
   }
 
   const showEditBlocked = (reason: TripItineraryBlockReason) => {
@@ -101,6 +107,12 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
   }
 
   const openAdd = (day: number = activeDay) => {
+    const lockedReason = getItineraryLockedBlockedReason(trip, memberId)
+    if (lockedReason) {
+      showEditBlocked(lockedReason)
+      return
+    }
+
     const blocked = getItineraryAddBlockedReason(trip)
     if (blocked) {
       showEditBlocked(blocked)
@@ -112,6 +124,12 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
   }
 
   const openImport = () => {
+    const lockedReason = getItineraryLockedBlockedReason(trip, memberId)
+    if (lockedReason) {
+      showEditBlocked(lockedReason)
+      return
+    }
+
     const blocked = getItineraryAddBlockedReason(trip)
     if (blocked) {
       showEditBlocked(blocked)
@@ -126,10 +144,14 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
   }
 
   const handleAdd = async () => {
-    if (!title.trim()) return
+    if (!title.trim()) {
+      setTitleError('請先輸入行程標題')
+      return
+    }
 
     setSubmitting(true)
     setError('')
+    setTitleError('')
     try {
       await addItineraryItem({
         tripId,
@@ -155,12 +177,18 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
   const isArchived = trip.status === 'archived'
   const isSettling = tripStatus === 'settling'
   const isEnded = tripStatus === 'ended'
-  const canMutate = canEdit && canEditItinerary(trip)
+  const canMutate = canMemberFullyEditItinerary(trip, memberId)
   const itineraryDetailEditMode = canMutate
     ? 'full'
-    : canEdit && canEditItineraryNotes(trip)
+    : canMemberEditItineraryNotes(trip, memberId)
       ? 'notes'
       : 'none'
+  const itineraryViewOnlyHint =
+    getItineraryLockedBlockedReason(trip, memberId) != null
+      ? ITINERARY_LOCKED_MESSAGE
+      : isArchived
+        ? TRIP_ARCHIVED_VIEW_HINT
+        : undefined
 
   if (!activeDayInfo) {
     return null
@@ -276,6 +304,7 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
         trip={trip}
         tripId={tripId}
         editMode={itineraryDetailEditMode}
+        viewOnlyHint={itineraryViewOnlyHint}
         onSaved={async (dayIndex) => {
           if (dayIndex != null) {
             setActiveDay(dayIndex)
@@ -315,10 +344,14 @@ export function ItineraryTab({ trip, tripId, memberId, canEdit, onReload, onEdit
           />
           <Input label="時間" type="time" value={time} onChange={(e) => setTime(e.target.value)} />
           <Input
-            label="標題"
-            placeholder="例：清水寺參觀"
+            label="行程標題 *"
+            placeholder="請輸入行程標題"
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            error={titleError}
+            onChange={(e) => {
+              setTitle(e.target.value)
+              if (titleError) setTitleError('')
+            }}
           />
           <Input
             label="地點"

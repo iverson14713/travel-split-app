@@ -39,6 +39,9 @@
 html {
   font-size: 16px;
   -webkit-text-size-adjust: 100%;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -48,10 +51,16 @@ body {
   line-height: 1.6;
   min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 #root {
   min-height: 100dvh;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 a {
@@ -70,7 +79,7 @@ input,
 select,
 textarea {
   font-family: inherit;
-  font-size: 1rem;
+  font-size: 16px;
 }
 
 /* Layout */
@@ -593,6 +602,7 @@ textarea {
   border-radius: var(--radius-md);
   background: var(--color-surface);
   color: var(--color-text);
+  font-size: 16px;
   transition: border-color 0.2s, box-shadow 0.2s;
   width: 100%;
 }
@@ -607,6 +617,15 @@ textarea {
   background: var(--color-bg-warm);
   color: var(--color-text-muted);
   cursor: default;
+}
+
+.form-input--error {
+  border-color: #c94c4c;
+}
+
+.form-input--error:focus {
+  border-color: #c94c4c;
+  box-shadow: 0 0 0 3px rgba(201, 76, 76, 0.15);
 }
 
 .form-select {
@@ -659,6 +678,7 @@ textarea {
 .form-textarea {
   resize: vertical;
   min-height: 80px;
+  font-size: 16px;
 }
 
 .form-error {
@@ -1419,9 +1439,19 @@ textarea {
   line-height: 1.5;
 }
 
+.itinerary-import-partial-hint {
+  margin: 0;
+  padding: 0.65rem 0.75rem;
+  border-radius: var(--radius-md);
+  background: var(--color-primary-light);
+  color: var(--color-primary-dark);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
 .itinerary-import-textarea {
   min-height: 12rem;
-  font-size: 0.9rem;
+  font-size: 16px;
   line-height: 1.45;
 }
 
@@ -1934,6 +1964,69 @@ textarea {
   display: flex;
   justify-content: flex-end;
   margin-top: 0.35rem;
+}
+
+.my-spending-details-empty {
+  text-align: center;
+  color: var(--color-text-muted);
+  padding: 1rem 0;
+}
+
+.my-spending-details-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.my-spending-details-item {
+  padding-bottom: 0.85rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.my-spending-details-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.my-spending-details-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.my-spending-details-name {
+  font-weight: 600;
+}
+
+.my-spending-details-share {
+  font-weight: 700;
+  color: var(--color-primary-dark);
+  white-space: nowrap;
+}
+
+.my-spending-details-meta {
+  margin: 0.2rem 0 0;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.my-spending-details-total {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.95rem;
+}
+
+.my-spending-details-total strong {
+  font-size: 1.1rem;
+  color: var(--color-primary-dark);
 }
 
 .overview-card-label {

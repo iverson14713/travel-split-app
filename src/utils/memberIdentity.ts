@@ -64,6 +64,35 @@ export function clearTripMemberIdentity(tripId: string): void {
   try {
     localStorage.removeItem(tripMemberIdKey(tripId))
     localStorage.removeItem(tripNicknameKey(tripId))
+    localStorage.removeItem(tripLeftKey(tripId))
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function tripLeftKey(tripId: string): string {
+  return `trip_left_${tripId}`
+}
+
+export function markTripLeftLocally(tripId: string): void {
+  try {
+    localStorage.setItem(tripLeftKey(tripId), new Date().toISOString())
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+export function isTripLeftLocally(tripId: string): boolean {
+  try {
+    return localStorage.getItem(tripLeftKey(tripId)) != null
+  } catch {
+    return false
+  }
+}
+
+export function clearTripLeftLocally(tripId: string): void {
+  try {
+    localStorage.removeItem(tripLeftKey(tripId))
   } catch {
     // Ignore storage failures.
   }

@@ -15,6 +15,7 @@ export interface Member {
   joinedAt: string
   status: MemberStatus
   removedAt?: string
+  leftAt?: string
 }
 
 export interface ItineraryItem {
@@ -24,6 +25,7 @@ export interface ItineraryItem {
   title: string
   location: string
   note: string
+  createdAt?: string
 }
 
 export interface Expense {
@@ -51,6 +53,7 @@ export interface Trip {
   lastActivityAt: string
   archivedAt?: string
   editPermission: EditPermission
+  itineraryLocked: boolean
   baseCurrency: string
   jpyToTwdRate: number
   usdToTwdRate: number

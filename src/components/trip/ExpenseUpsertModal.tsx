@@ -8,6 +8,7 @@ import { checkExpenseLimit } from '../../services/tripUnlockService'
 import type { UpgradeReason } from '../../services/tripUnlockService'
 import { getExchangeRateForCurrency } from '../../utils/settlement'
 import { getActiveMembers, getSelectableMembers } from '../../utils/members'
+import { buildMemberDisplayLabelMap } from '../../utils/memberNames'
 import { Modal } from '../ui/Modal'
 import { Select } from '../ui/Select'
 import { Input } from '../ui/Input'
@@ -66,13 +67,21 @@ export function ExpenseUpsertModal({
   )
   const defaultPayer = currentMemberId ?? ''
 
+  const memberDisplayLabels = useMemo(
+    () => buildMemberDisplayLabelMap(trip.members, currentMemberId),
+    [trip.members, currentMemberId],
+  )
+
   const memberOptions = useMemo(
     () =>
-      selectableMembers.map((m) => ({
-        value: m.id,
-        label: m.nickname + (m.isHost ? '（主揪）' : ''),
-      })),
-    [selectableMembers],
+      selectableMembers.map((m) => {
+        const label = memberDisplayLabels.get(m.id) ?? m.nickname
+        return {
+          value: m.id,
+          label: label + (m.isHost ? '（主揪）' : ''),
+        }
+      }),
+    [selectableMembers, memberDisplayLabels],
   )
 
   const memberSelectOptions = useMemo(
@@ -280,7 +289,7 @@ export function ExpenseUpsertModal({
                       checked={participantIds.includes(m.id)}
                       onChange={() => toggleParticipant(m.id)}
                     />
-                    {m.nickname}
+                    {memberDisplayLabels.get(m.id) ?? m.nickname}
                   </label>
                 ))}
               </div>

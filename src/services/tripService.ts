@@ -3,7 +3,9 @@ import { DB_TABLES } from '../lib/database.tables'
 import type { EditPermission, ExchangeRateSource, Expense, ExpenseType, ItineraryItem, Member, MemberStatus, Trip, TripStatus } from '../types'
 import { generateTripCode } from '../utils/tripCode'
 import { getDeviceId } from '../utils/memberIdentity'
+import { DUPLICATE_NICKNAME_ERROR, isDuplicateNickname } from '../utils/memberNames'
 import { computeOwnerRepair } from '../utils/tripOwnerRepair'
+import { sortItineraryItemsByDay } from '../utils/itinerarySort'
 import { FALLBACK_RATES_TO_TWD, getRateFromTripMap } from './exchangeRateService'
 
 interface TripRow {
@@ -18,6 +20,7 @@ interface TripRow {
   archived_at: string | null
   deleted_at: string | null
   edit_permission: EditPermission
+  itinerary_locked?: boolean | null
   base_currency: string
   jpy_to_twd_rate: number
   usd_to_twd_rate: number
@@ -37,6 +40,7 @@ interface MemberRow {
   role: 'owner' | 'member'
   status?: MemberStatus | null
   removed_at?: string | null
+  left_at?: string | null
   created_at: string
 }
 
@@ -82,6 +86,7 @@ function mapMember(row: MemberRow, ownerMemberId?: string | null): Member {
     joinedAt: row.created_at,
     status,
     removedAt: row.removed_at ?? undefined,
+    leftAt: row.left_at ?? undefined,
   }
 }
 
@@ -93,6 +98,7 @@ function mapItinerary(row: ItineraryRow): ItineraryItem {
     title: row.title,
     location: row.location ?? '',
     note: row.note ?? '',
+    createdAt: row.created_at,
   }
 }
 
@@ -160,6 +166,7 @@ function mapTrip(
     lastActivityAt: row.last_activity_at,
     archivedAt: row.archived_at ?? undefined,
     editPermission: row.edit_permission as EditPermission,
+    itineraryLocked: row.itinerary_locked === true,
     baseCurrency: row.base_currency ?? 'TWD',
     jpyToTwdRate,
     usdToTwdRate,
@@ -170,7 +177,7 @@ function mapTrip(
     ownerMemberId: row.owner_member_id ?? undefined,
     createdByDeviceId: row.created_by_device_id ?? undefined,
     members: members.map((member) => mapMember(member, row.owner_member_id)),
-    itinerary: itinerary.map(mapItinerary),
+    itinerary: sortItineraryItemsByDay(itinerary.map(mapItinerary)),
     expenses: expenses.map((expenseRow) => mapExpense(expenseRow, exchangeRatesToTwd)),
     createdAt: row.created_at,
   }
@@ -249,7 +256,7 @@ export async function fetchTripByCode(code: string): Promise<Trip | null> {
 
   const [membersResult, itineraryResult, expensesResult] = await Promise.all([
     db.from(DB_TABLES.members).select('*').eq('trip_id', tripRow.id).order('created_at'),
-    db.from(DB_TABLES.itineraryItems).select('*').eq('trip_id', tripRow.id).order('day_index'),
+    db.from(DB_TABLES.itineraryItems).select('*').eq('trip_id', tripRow.id).order('day_index').order('created_at'),
     db.from(DB_TABLES.expenses).select('*').eq('trip_id', tripRow.id).order('created_at', { ascending: false }),
   ])
 
@@ -331,7 +338,8 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
       destination: input.destination,
       start_date: input.startDate,
       end_date: input.endDate,
-      edit_permission: 'owner_only',
+      edit_permission: 'all_members',
+      itinerary_locked: false,
       base_currency: 'TWD',
       jpy_to_twd_rate: exchangeRatesToTwd.JPY ?? input.jpyToTwdRate ?? 0.215,
       usd_to_twd_rate: exchangeRatesToTwd.USD ?? input.usdToTwdRate ?? 32,
@@ -380,12 +388,29 @@ export async function createTrip(input: CreateTripInput): Promise<CreateTripResu
 
 export async function joinTrip(tripId: string, nickname: string): Promise<Member> {
   const db = requireSupabase()
+  const trimmed = nickname.trim()
+
+  const [{ data: tripRow, error: tripError }, { data: existingRows, error: fetchError }] =
+    await Promise.all([
+      db.from(DB_TABLES.trips).select('owner_member_id').eq('id', tripId).maybeSingle(),
+      db.from(DB_TABLES.members).select('*').eq('trip_id', tripId),
+    ])
+
+  if (tripError) throw tripError
+  if (fetchError) throw fetchError
+
+  const existingMembers = ((existingRows ?? []) as MemberRow[]).map((row) =>
+    mapMember(row, tripRow?.owner_member_id),
+  )
+  if (isDuplicateNickname(existingMembers, trimmed)) {
+    throw new Error(DUPLICATE_NICKNAME_ERROR)
+  }
 
   const { data, error } = await db
     .from(DB_TABLES.members)
     .insert({
       trip_id: tripId,
-      name: nickname,
+      name: trimmed,
       role: 'member',
     })
     .select()
@@ -393,7 +418,7 @@ export async function joinTrip(tripId: string, nickname: string): Promise<Member
 
   if (error) throw error
   await touchTripActivity(tripId)
-  return mapMember(data, null)
+  return mapMember(data, tripRow?.owner_member_id)
 }
 
 export async function addItineraryItem(input: {
@@ -573,16 +598,110 @@ export async function deleteExpense(expenseId: string, tripId: string): Promise<
 
 export async function updateMemberName(memberId: string, name: string): Promise<void> {
   const db = requireSupabase()
+  const trimmed = name.trim()
+
+  const { data: memberRow, error: memberError } = await db
+    .from(DB_TABLES.members)
+    .select('trip_id')
+    .eq('id', memberId)
+    .single()
+
+  if (memberError) throw memberError
+
+  const [{ data: tripRow, error: tripError }, { data: memberRows, error: listError }] =
+    await Promise.all([
+      db.from(DB_TABLES.trips).select('owner_member_id').eq('id', memberRow.trip_id).maybeSingle(),
+      db.from(DB_TABLES.members).select('*').eq('trip_id', memberRow.trip_id),
+    ])
+
+  if (tripError) throw tripError
+  if (listError) throw listError
+
+  const members = ((memberRows ?? []) as MemberRow[]).map((row) =>
+    mapMember(row, tripRow?.owner_member_id),
+  )
+  if (isDuplicateNickname(members, trimmed, memberId)) {
+    throw new Error(DUPLICATE_NICKNAME_ERROR)
+  }
 
   const { data, error } = await db
     .from(DB_TABLES.members)
-    .update({ name })
+    .update({ name: trimmed })
     .eq('id', memberId)
     .select('trip_id')
     .single()
 
   if (error) throw error
   await touchTripActivity(data.trip_id)
+}
+
+export async function leaveTrip(memberId: string, tripId: string): Promise<void> {
+  const db = requireSupabase()
+  const now = new Date().toISOString()
+
+  const { data: tripRow, error: tripError } = await db
+    .from(DB_TABLES.trips)
+    .select('owner_member_id')
+    .eq('id', tripId)
+    .maybeSingle()
+
+  if (tripError) throw tripError
+  if (!tripRow) throw new Error('找不到此旅程')
+
+  const { data: memberRow, error: memberError } = await db
+    .from(DB_TABLES.members)
+    .select('id, role, status, removed_at, left_at')
+    .eq('id', memberId)
+    .eq('trip_id', tripId)
+    .maybeSingle()
+
+  if (memberError) throw memberError
+  if (!memberRow) throw new Error('找不到此成員')
+  if (memberRow.status === 'removed' || memberRow.removed_at != null) {
+    throw new Error('此成員已不在旅程中')
+  }
+  if (memberRow.left_at != null) throw new Error('你已退出此旅程')
+
+  const isOwner =
+    memberRow.role === 'owner' || memberRow.id === tripRow.owner_member_id
+
+  if (isOwner) {
+    const { data: others, error: othersError } = await db
+      .from(DB_TABLES.members)
+      .select('id')
+      .eq('trip_id', tripId)
+      .neq('id', memberId)
+      .eq('status', 'active')
+      .is('removed_at', null)
+      .is('left_at', null)
+
+    if (othersError) throw othersError
+    if (others && others.length > 0) {
+      throw new Error('請先轉移主揪身分或封存旅程後再退出')
+    }
+  }
+
+  const { error } = await db
+    .from(DB_TABLES.members)
+    .update({ left_at: now })
+    .eq('id', memberId)
+    .eq('trip_id', tripId)
+
+  if (error) throw error
+  await touchTripActivity(tripId)
+}
+
+export async function reactivateMember(memberId: string, tripId: string): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db
+    .from(DB_TABLES.members)
+    .update({ left_at: null })
+    .eq('id', memberId)
+    .eq('trip_id', tripId)
+
+  if (error) throw error
+  await touchTripActivity(tripId)
 }
 
 export async function removeMember(memberId: string, tripId: string): Promise<void> {
@@ -611,6 +730,17 @@ export async function removeMember(memberId: string, tripId: string): Promise<vo
 
   if (error) throw error
   await touchTripActivity(tripId)
+}
+
+export async function updateItineraryLocked(tripId: string, locked: boolean): Promise<void> {
+  const db = requireSupabase()
+
+  const { error } = await db
+    .from(DB_TABLES.trips)
+    .update({ itinerary_locked: locked, last_activity_at: new Date().toISOString() })
+    .eq('id', tripId)
+
+  if (error) throw error
 }
 
 export async function updateEditPermission(

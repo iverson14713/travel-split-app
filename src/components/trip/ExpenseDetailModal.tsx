@@ -2,6 +2,7 @@ import type { Expense, Trip } from '../../types'
 import { formatRateEstimateLine } from '../../constants/currencies'
 import { formatDateTime } from '../../utils/dates'
 import { deleteExpense } from '../../services/tripService'
+import { getMemberDisplayLabel } from '../../utils/memberNames'
 import { formatAmount, resolveExchangeRateToTwd, roundAmount, toTwdAmount } from '../../utils/settlement'
 import { Modal } from '../ui/Modal'
 import { Button } from '../ui/Button'
@@ -14,6 +15,7 @@ interface ExpenseDetailModalProps {
   onEdit: (expense: Expense) => void
   onDeleted: () => Promise<void>
   readOnly?: boolean
+  currentMemberId?: string
 }
 
 function DetailRow({ label, value }: { label: string; value: string }) {
@@ -33,10 +35,12 @@ export function ExpenseDetailModal({
   onEdit,
   onDeleted,
   readOnly = false,
+  currentMemberId,
 }: ExpenseDetailModalProps) {
   if (!expense) return null
 
-  const getMemberName = (id: string) => trip.members.find((m) => m.id === id)?.nickname ?? '未知'
+  const getMemberName = (id: string) =>
+    getMemberDisplayLabel(trip.members, id, currentMemberId)
   const currency = (expense.currency || 'TWD').toUpperCase()
   const rateToTwd = resolveExchangeRateToTwd(expense, trip.exchangeRatesToTwd)
   const twdAmount = toTwdAmount(expense.amount, rateToTwd)
